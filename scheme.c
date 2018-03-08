@@ -270,6 +270,12 @@ READ_LBL(read_start)
 		goto read_hash;
 	case '"':
 		goto read_string;
+	case '\'':
+		goto read_quote;
+	case '`':
+		goto read_quasiquote;
+	case ',':
+		goto read_comma;
 	default:
 		if('-' == c || isdigit(c))
 			goto read_number;
@@ -357,6 +363,25 @@ READ_LBL(read_symbol_char)
 	read_symbol_buf[read_symbol_buflen++] = c;
 	read_symbol_buf[read_symbol_buflen] = '\0';
 	goto read_symbol_char;
+
+	struct Object x;
+READ_LBL(read_quote)
+	x = scheme_read();
+	x = scheme_cons(x, (struct Object){ .tag = T_NIL });
+	x = scheme_cons(scheme_intern("quote"), x);
+	return x;
+
+READ_LBL(read_quasiquote)
+	x = scheme_read();
+	x = scheme_cons(x, (struct Object){ .tag = T_NIL });
+	x = scheme_cons(scheme_intern("quasiquote"), x);
+	return x;
+
+READ_LBL(read_comma)
+	x = scheme_read();
+	x = scheme_cons(x, (struct Object){ .tag = T_NIL });
+	x = scheme_cons(scheme_intern("comma"), x);
+	return x;	
 }
 
 struct Object scheme_read_many() {
