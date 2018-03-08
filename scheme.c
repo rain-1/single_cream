@@ -11,6 +11,7 @@
 enum ObjectType {
 	T_TRUE,
 	T_FALSE,
+	T_EOF,
 	T_SYMBOL,
 	T_NUMBER,
 	T_STRING,
@@ -180,6 +181,9 @@ void scheme_display(struct Object x) {
 	case T_FALSE:
 		fprintf(stdout, "#f");
 		break;
+	case T_EOF:
+		fprintf(stdout, "#<EOF>");
+		break;
 	case T_SYMBOL:
 		fprintf(stdout, "%s", scheme_symbol_name(x.symbol.id));
 		break;
@@ -257,6 +261,8 @@ struct Object scheme_read() {
 READ_LBL(read_start)
 	c = fgetc(stdin);
 	switch(c) {
+	case EOF:
+		return (struct Object){ .tag = T_EOF };
 	case ' ':
 	case '\n':
 	case '\t':
@@ -445,11 +451,12 @@ int main(int argc, char **argv) {
 
 	struct Object x;
 	
-	while(!feof(stdin)) {
+	do {
 		x = scheme_read();
+		if(x.tag == T_EOF) break;
 		scheme_display(x);
 		puts("");
-	}
+	} while(1);
 	
 	return 0;
 }
