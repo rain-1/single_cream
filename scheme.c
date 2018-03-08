@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 /*
  * Scheme object data type
@@ -11,6 +12,7 @@ enum ObjectType {
 	T_TRUE,
 	T_FALSE,
 	T_SYMBOL,
+	T_NUMBER,
 	T_STRING,
 	T_NIL,
 	T_CONS,
@@ -22,6 +24,9 @@ struct Object {
 		struct {
 			int id;
 		} symbol;
+		struct {
+			int val;
+		} number;
 		struct {
 			int len;
 			char *text;
@@ -60,7 +65,7 @@ struct Object scheme_cons(struct Object car, struct Object cdr) {
 	the_cars[conses_size] = car;
 	the_cdrs[conses_size] = cdr;
 
-	ret = (struct Object){ .tag = T_CONS, .cons.car = &the_cars[conses_size], .cons.cdr = &the_cars[conses_size] };
+	ret = (struct Object){ .tag = T_CONS, .cons.car = &the_cars[conses_size], .cons.cdr = &the_cdrs[conses_size] };
 	conses_size++;
 	
 	return ret;
@@ -178,6 +183,9 @@ void scheme_display(struct Object x) {
 	case T_SYMBOL:
 		fprintf(stdout, "%s", scheme_symbol_name(x.symbol.id));
 		break;
+	case T_NUMBER:
+		fprintf(stdout, "%d", x.number.val);
+		break;
 	case T_STRING:
 		fprintf(stdout, "\"");
 		for(i = 0; i < x.string.len; i++) {
@@ -202,6 +210,7 @@ loop:
 			fprintf(stdout, ")");
 			break;
 		case T_CONS:
+			fprintf(stdout, " ");
 			x = *x.cons.cdr;
 			goto loop;
 		default:
@@ -211,7 +220,6 @@ loop:
 			break;
 		}
 		break;
-	
 	default:
 		fprintf(stderr, "scheme_display: unknown object.\n");
 		exit(1);
@@ -222,6 +230,142 @@ loop:
  * Reader
  *
  */
+
+//#define DEBUG
+#ifdef DEBUG
+
+#define DOUBLEESCAPE(a) #a
+#define ESCAPEQUOTE(a) DOUBLEESCAPE(a)
+#define READ_LBL_X(lbl, lblnm) lbl: fprintf(stderr, "[DEBUG] scheme_read: %s\n", lblnm);
+#define READ_LBL(lbl) READ_LBL_X(lbl, ESCAPEQUOTE(lbl))
+
+#else
+
+#define READ_LBL(lbl) lbl:
+
+#endif
+
+struct Object scheme_read_many();
+
+struct Object scheme_read() {
+	char c;
+	
+	goto read_start;
+
+READ_LBL(read_start)
+	c = fgetc(stdin);
+	switch(c) {
+	case ' ':
+	case '\n':
+	case '\t':
+		goto read_start;
+	case '(':
+		return scheme_read_many();
+	case '#':
+		goto read_hash;
+	default:
+		if('-' == c || isdigit(c))
+			goto read_number;
+		else
+			goto read_symbol;
+	}
+
+READ_LBL(read_hash)
+	c = fgetc(stdin);
+	switch(c) {
+	case 't':
+		return (struct Object){ .tag = T_TRUE };
+	case 'f':
+		return (struct Object){ .tag = T_FALSE };
+	default:
+		fprintf(stderr, "scheme_read: error inside read_hash.");
+		exit(1);
+	}
+
+	int read_number_negative;
+	char read_number_buf[64];
+	int read_number_buflen;
+	int val;
+READ_LBL(read_number)
+	if(c == '-') {
+		read_number_negative = 1;
+		read_number_buf[0] = '\0';
+		read_number_buflen = 0;
+	}
+	else {
+		read_number_negative = 0;
+		read_number_buf[0] = c;
+		read_number_buf[1] = '\0';
+		read_number_buflen = 1;
+	}
+
+READ_LBL(read_number_digit)
+	c = fgetc(stdin);
+	if(isdigit(c)) {
+		read_number_buf[read_number_buflen++] = c;
+		read_number_buf[read_number_buflen] = '\0';
+		goto read_number_digit;
+	}
+	else {
+		ungetc(c, stdin);
+		val = atoi(read_number_buf);
+		return (struct Object){ .tag = T_NUMBER, .number.val = read_number_negative ? -val : val };
+	}
+
+	char read_symbol_buf[64];
+	int read_symbol_buflen;
+READ_LBL(read_symbol)
+	read_symbol_buf[0] = c;
+	read_symbol_buf[1] = '\0';
+	read_symbol_buflen = 1;
+READ_LBL(read_symbol_char)
+	c = fgetc(stdin);
+	if(c == ')' || c == ' ' || c == '\n' || c == '\t') {
+		ungetc(c, stdin);
+		return scheme_intern(read_symbol_buf);
+	}
+	read_symbol_buf[read_symbol_buflen++] = c;
+	read_symbol_buf[read_symbol_buflen] = '\0';
+	goto read_symbol_char;
+}
+
+struct Object scheme_read_many() {
+	char c;
+	struct Object x, xs;
+
+READ_LBL(read_many)
+	c = fgetc(stdin);
+	switch(c) {
+	case ' ':
+	case '\n':
+	case '\t':
+		goto read_many;
+	case ')':
+		return (struct Object){ .tag = T_NIL };
+	case '.':
+		x = scheme_read();
+		goto read_finish;
+	default:
+		ungetc(c, stdin);
+		x = scheme_read();
+		xs = scheme_read_many();
+		return scheme_cons(x, xs);
+	}
+
+READ_LBL(read_finish)
+	c = fgetc(stdin);
+	switch(c) {
+	case ' ':
+	case '\n':
+	case '\t':
+		goto read_finish;
+	case ')':
+		return x;
+	default:
+		fprintf(stderr, "scheme_read_many: error multiple items after dot.");
+		exit(1);
+	}
+}
 
 /*
  * Closure Conversion and Flattening
@@ -243,6 +387,14 @@ int main(int argc, char **argv) {
 	// compile it, adding the flattened code to the code store
 	// execute the resulting definition or expression
 	// until EOF
+
+	struct Object x;
+	
+	while(!feof(stdin)) {
+		x = scheme_read();
+		scheme_display(x);
+		puts("");
+	}
 	
 	return 0;
 }
