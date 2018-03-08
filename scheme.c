@@ -251,7 +251,6 @@ loop:
 
 struct Object scheme_read_many();
 
-// TODO: check EOF on each fgetc
 // TODO: bounds check on input buffers
 struct Object scheme_read() {
 	char c;
@@ -270,7 +269,7 @@ READ_LBL(read_start)
 	case '(':
 		return scheme_read_many();
 	case ')':
-		fprintf(stderr, "scheme_read: too many close parenthesis.");
+		fprintf(stderr, "scheme_read: too many close parenthesis.\n");
 		exit(1);
 	case '#':
 		goto read_hash;
@@ -292,12 +291,15 @@ READ_LBL(read_start)
 READ_LBL(read_hash)
 	c = fgetc(stdin);
 	switch(c) {
+	case EOF:
+		fprintf(stderr, "scheme_read: early EOF in read_hash.\n");
+		exit(1);
 	case 't':
 		return (struct Object){ .tag = T_TRUE };
 	case 'f':
 		return (struct Object){ .tag = T_FALSE };
 	default:
-		fprintf(stderr, "scheme_read: error inside read_hash.");
+		fprintf(stderr, "scheme_read: error inside read_hash.\n");
 		exit(1);
 	}
 
@@ -309,6 +311,9 @@ READ_LBL(read_string)
 READ_LBL(read_string_char)
 	c = fgetc(stdin);
 	switch(c) {
+	case EOF:
+		fprintf(stderr, "scheme_read: early EOF in read_string.\n");
+		exit(1);
 	case '\\':
 		goto read_string_esc_char;
 	case '"':
@@ -329,7 +334,11 @@ READ_LBL(read_string_esc_char)
 	int read_number_buflen;
 	int val;
 READ_LBL(read_number)
-	if(c == '-') {
+	if(c == EOF) {
+		fprintf(stderr, "scheme_read: early EOF in read_number.\n");
+		exit(1);
+	}
+	else if(c == '-') {
 		read_number_negative = 1;
 		read_number_buf[0] = '\0';
 		read_number_buflen = 0;
@@ -343,7 +352,11 @@ READ_LBL(read_number)
 
 READ_LBL(read_number_digit)
 	c = fgetc(stdin);
-	if(isdigit(c)) {
+	if(c == EOF) {
+		fprintf(stderr, "scheme_read: early EOF in read_number_digit.\n");
+		exit(1);
+	}
+	else if(isdigit(c)) {
 		read_number_buf[read_number_buflen++] = c;
 		read_number_buf[read_number_buflen] = '\0';
 		goto read_number_digit;
@@ -362,7 +375,11 @@ READ_LBL(read_symbol)
 	read_symbol_buflen = 1;
 READ_LBL(read_symbol_char)
 	c = fgetc(stdin);
-	if(c == ')' || c == ' ' || c == '\n' || c == '\t') {
+	if(c == EOF) {
+		fprintf(stderr, "scheme_read: early EOF in read_symbol_char.\n");
+		exit(1);
+	}
+	else if(c == ')' || c == ' ' || c == '\n' || c == '\t') {
 		ungetc(c, stdin);
 		return scheme_intern(read_symbol_buf);
 	}
@@ -397,6 +414,9 @@ struct Object scheme_read_many() {
 READ_LBL(read_many)
 	c = fgetc(stdin);
 	switch(c) {
+	case EOF:
+		fprintf(stderr, "scheme_read_many: early EOF.\n");
+		exit(1);
 	case ' ':
 	case '\n':
 	case '\t':
@@ -416,6 +436,9 @@ READ_LBL(read_many)
 READ_LBL(read_finish)
 	c = fgetc(stdin);
 	switch(c) {
+	case EOF:
+		fprintf(stderr, "scheme_read_many: early EOF in read_finish.\n");
+		exit(1);
 	case ' ':
 	case '\n':
 	case '\t':
@@ -423,7 +446,7 @@ READ_LBL(read_finish)
 	case ')':
 		return x;
 	default:
-		fprintf(stderr, "scheme_read_many: error multiple items after dot.");
+		fprintf(stderr, "scheme_read_many: error multiple items after dot.\n");
 		exit(1);
 	}
 }
