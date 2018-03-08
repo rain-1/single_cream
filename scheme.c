@@ -17,6 +17,8 @@ enum ObjectType {
 	T_STRING,
 	T_NIL,
 	T_CONS,
+	
+	T_GC_FWD,
 };
 
 struct Object {
@@ -36,46 +38,153 @@ struct Object {
 			struct Object *car;
 			struct Object *cdr;
 		} cons;
+		struct {
+			struct Object *ptr;
+		} gc_fwd;
 	};
 };
 
 /*
- * The rails
- * https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-33.html#%_sec_5.3
+ * Prototypes
+ */
+
+struct Object scheme_cons(struct Object car, struct Object cdr);
+struct Root *scheme_gc_add_root(struct Object obj);
+void scheme_gc_delete_root(struct Root *rt);
+void scheme_gc();
+
+struct Object scheme_intern(char *name);
+char *scheme_symbol_name(int id);
+
+void scheme_display(struct Object x);
+
+struct Object scheme_read();
+
+int scheme_global_intern(char *name);
+struct Object scheme_get_global(int gid);
+void scheme_set_global(int gid, struct Object val);
+
+
+/*
+ * The heap
  *
  */
 
-#define MAX_CONSES 4096
-struct Object the_cars_array[MAX_CONSES];
-struct Object the_cdrs_array[MAX_CONSES];
-struct Object new_cars_array[MAX_CONSES];
-struct Object new_cdrs_array[MAX_CONSES];
-struct Object *the_cars = the_cars_array;
-struct Object *the_cdrs = the_cdrs_array;
-struct Object *new_cars = new_cars_array;
-struct Object *new_cdrs = new_cdrs_array;
-int conses_size = 0;
+#define MAX_CELLS 4096
+struct Object gc_heap_a[MAX_CELLS];
+struct Object gc_heap_b[MAX_CELLS];
+
+struct Object *gc_from_heap = gc_heap_a;
+struct Object *gc_to_heap = gc_heap_b;
+int gc_free = 0;
 
 struct Object scheme_cons(struct Object car, struct Object cdr) {
 	struct Object ret;
 	
-	if(conses_size == MAX_CONSES) {
+	if(gc_free + 2 > MAX_CELLS) {
 		fprintf(stderr, "scheme_cons: ran out of cons cells.\n");
 	}
-	
-	the_cars[conses_size] = car;
-	the_cdrs[conses_size] = cdr;
 
-	ret = (struct Object){ .tag = T_CONS, .cons.car = &the_cars[conses_size], .cons.cdr = &the_cdrs[conses_size] };
-	conses_size++;
+	ret = (struct Object){ .tag = T_CONS };
 	
+	gc_from_heap[gc_free] = car;
+	ret.cons.car = &gc_from_heap[gc_free];
+	gc_free++;
+	
+	gc_from_heap[gc_free] = cdr;
+	ret.cons.cdr = &gc_from_heap[gc_free];
+	gc_free++;
+
 	return ret;
 }
 
-void scheme_gc() {
-	// TODO
+struct Root {
+	struct Root *prev;
+	struct Root *next;
+	struct Object obj;
+};
+
+struct Root *gc_roots = NULL;
+int gc_scan;
+
+struct Root *scheme_gc_add_root(struct Object obj) {
+	struct Root *rt;
+	
+	rt = malloc(sizeof(struct Root));
+	rt->prev = NULL;
+	rt->next = gc_roots;
+	rt->obj = obj;
+	if(gc_roots) gc_roots->prev = rt;
+	
+	gc_roots = rt;
+	
+	return rt;
 }
 
+void scheme_gc_delete_root(struct Root *rt) {
+	if(rt->prev) {
+		rt->prev->next = rt->next;
+	}
+
+	if(rt->next) {
+		rt->next->prev = rt->prev;
+	}
+
+	rt->prev = NULL;
+	rt->next = NULL;
+	rt->obj = (struct Object){ .tag = T_NIL };
+	free(rt);
+}
+
+void scheme_gc_forward(struct Object *obj);
+
+#define DEBUG_GC
+
+void scheme_gc() {
+	struct Root *rt;
+	
+	gc_free = 0;
+	gc_scan = 0;
+
+#define SWAP(a,b) do { struct Object *tmp; tmp = a; a = b; b = tmp; } while(0)
+	SWAP(gc_from_heap, gc_to_heap);
+	
+	for(rt = gc_roots; rt; rt = rt->next) {
+		scheme_gc_forward(&rt->obj);
+	}
+	
+	// TODO: also process the globals as roots
+	
+	for(; gc_scan < gc_free; gc_scan++) {
+		scheme_gc_forward(&gc_from_heap[gc_scan]);
+	}
+	
+#ifdef DEBUG_GC
+	printf("[GC] gc_free=%d\n", gc_free);
+#endif
+}
+
+void scheme_gc_forward(struct Object *obj) {
+	struct Object *old_car, *old_cdr;
+
+#ifdef DEBUG_GC
+//	scheme_display(*obj);
+//	puts("");
+#endif
+
+	switch(obj->tag) {
+	case T_CONS:
+		old_car = obj->cons.car;
+		old_cdr = obj->cons.cdr;
+		*obj = scheme_cons(*old_car, *old_cdr);
+		*old_car = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->cons.car };
+		*old_cdr = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->cons.cdr };
+		break;
+	case T_GC_FWD:
+		*obj = *(obj->gc_fwd.ptr);
+		break;
+	}
+}
 
 /*
  * Symbol table
@@ -473,12 +582,20 @@ int main(int argc, char **argv) {
 	// until EOF
 
 	struct Object x;
+	struct Root *rt;
 	
 	do {
 		x = scheme_read();
 		if(x.tag == T_EOF) break;
+
+		rt = scheme_gc_add_root(x);
+
 		scheme_display(x);
 		puts("");
+		
+		scheme_gc_delete_root(rt);
+
+		scheme_gc();
 	} while(1);
 	
 	return 0;
