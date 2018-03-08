@@ -247,6 +247,8 @@ loop:
 
 struct Object scheme_read_many();
 
+// TODO: check EOF on each fgetc
+// TODO: bounds check on input buffers
 struct Object scheme_read() {
 	char c;
 	
@@ -261,8 +263,13 @@ READ_LBL(read_start)
 		goto read_start;
 	case '(':
 		return scheme_read_many();
+	case ')':
+		fprintf(stderr, "scheme_read: too many close parenthesis.");
+		exit(1);
 	case '#':
 		goto read_hash;
+	case '"':
+		goto read_string;
 	default:
 		if('-' == c || isdigit(c))
 			goto read_number;
@@ -281,6 +288,29 @@ READ_LBL(read_hash)
 		fprintf(stderr, "scheme_read: error inside read_hash.");
 		exit(1);
 	}
+
+	char read_string_buf[64];
+	int read_string_buflen;
+READ_LBL(read_string)
+	read_string_buf[0] = '\0';
+	read_string_buflen = 0;
+READ_LBL(read_string_char)
+	c = fgetc(stdin);
+	switch(c) {
+	case '\\':
+		goto read_string_esc_char;
+	case '"':
+		return (struct Object){ .tag = T_STRING, .string.len = strlen(read_string_buf), .string.text = strdup(read_string_buf) };
+	default:
+		read_string_buf[read_string_buflen++] = c;
+		read_string_buf[read_string_buflen] = '\0';
+		goto read_string_char;
+	}
+READ_LBL(read_string_esc_char)
+	c = fgetc(stdin);
+	read_string_buf[read_string_buflen++] = c;
+	read_string_buf[read_string_buflen] = '\0';
+	goto read_string_char;
 
 	int read_number_negative;
 	char read_number_buf[64];
