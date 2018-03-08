@@ -83,6 +83,7 @@ struct Object scheme_cons(struct Object car, struct Object cdr) {
 	
 	if(gc_free + 2 > MAX_CELLS) {
 		fprintf(stderr, "scheme_cons: ran out of cons cells.\n");
+		exit(1);
 	}
 
 	ret = (struct Object){ .tag = T_CONS };
@@ -124,6 +125,12 @@ struct Root *scheme_gc_add_root(struct Object obj) {
 void scheme_gc_delete_root(struct Root *rt) {
 	if(rt->prev) {
 		rt->prev->next = rt->next;
+	}
+	else {
+		// this is the case where gc_roots = rt
+		// to not lose all of our other roots
+		// we will need to update gc_reets
+		gc_roots = rt->next;
 	}
 
 	if(rt->next) {
@@ -168,8 +175,8 @@ void scheme_gc_forward(struct Object *obj) {
 	struct Object *old_car, *old_cdr;
 
 #ifdef DEBUG_GC
-//	scheme_display(*obj);
-//	puts("");
+	scheme_display(*obj);
+	puts("");
 #endif
 
 	switch(obj->tag) {
@@ -590,12 +597,15 @@ int main(int argc, char **argv) {
 
 		rt = scheme_gc_add_root(x);
 
-		scheme_display(x);
+		scheme_display(rt->obj);
 		puts("");
-		
-		scheme_gc_delete_root(rt);
 
 		scheme_gc();
+		
+		scheme_display(rt->obj);
+		puts("");
+
+		scheme_gc_delete_root(rt);
 	} while(1);
 	
 	return 0;
