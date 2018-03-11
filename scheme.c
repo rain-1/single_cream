@@ -68,6 +68,7 @@ int scheme_global_intern(char *name);
 struct Object scheme_get_global(int gid);
 void scheme_set_global(int gid, struct Object val);
 
+void scheme_eval(struct Object exp, struct Object env);
 
 /*
  * The heap
@@ -292,6 +293,32 @@ void scheme_set_global(int gid, struct Object val) {
  * Display
  *
  */
+
+int scheme_eq(struct Object x, struct Object y) {
+	if(x.tag != y.tag) return 0;
+	
+	switch(x.tag) {
+	case T_TRUE:
+	case T_FALSE:
+	case T_EOF:
+	case T_NIL:
+		return 1;
+
+	case T_SYMBOL:
+		return x.symbol.id == y.symbol.id;
+	case T_NUMBER:
+		return x.number.val == y.number.val;
+	case T_CHARACTER:
+		return x.character.val == y.character.val;
+
+	case T_CONS:
+		return x.cons.car == y.cons.car && x.cons.cdr == y.cons.cdr;
+	case T_STRING:
+		return x.string.len == y.string.len && x.string.text == y.string.text;
+	default:
+		return 0;
+	}
+}
 
 void scheme_display(struct Object x) {
 	int i;
@@ -619,14 +646,32 @@ READ_LBL(read_finish)
 }
 
 /*
- * Closure Conversion and Flattening
- *
- */
-
-/*
  * Evaluator
  *
  */
+
+int scheme_shape_define(struct Object exp) {
+// (define (def? exp)
+//   (and (pair? exp)
+//        (eq? 'define (car exp))
+//        (pair? (cdr exp))
+//        (pair? (cddr exp)))
+	return
+		exp.tag == T_CONS &&
+		exp.cons.car->tag == T_SYMBOL &&
+		scheme_eq(scheme_intern("define"), *exp.cons.car) &&
+		exp.cons.cdr->tag == T_CONS &&
+		exp.cons.cdr->cons.cdr->tag == T_CONS;
+}
+
+void scheme_eval(struct Object exp, struct Object env) {
+	if(scheme_shape_define(exp)) {
+		puts("def");
+	}
+	else {
+		puts("exp");
+	}
+}
 
 /*
  * Main
@@ -653,10 +698,12 @@ int main(int argc, char **argv) {
 		scheme_display(rt->obj);
 		puts("");
 
+		scheme_eval(rt->obj, (struct Object){ .tag = T_NIL });
+
 		scheme_gc();
 		
-		scheme_display(rt->obj);
-		puts("");
+//		scheme_display(rt->obj);
+//		puts("");
 
 		scheme_gc_delete_root(rt);
 	} while(1);
