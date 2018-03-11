@@ -3,6 +3,9 @@
 #include <string.h>
 #include <ctype.h>
 
+#define DOUBLEESCAPE(a) #a
+#define ESCAPEQUOTE(a) DOUBLEESCAPE(a)
+
 /*
  * Scheme object data type
  *
@@ -59,6 +62,7 @@ void scheme_gc();
 
 struct Object scheme_intern(char *name);
 char *scheme_symbol_name(int id);
+void scheme_init_symbols();
 
 void scheme_display(struct Object x);
 
@@ -237,6 +241,28 @@ char *scheme_symbol_name(int id) {
 	return symbol_table[id];
 }
 
+// provide sym_foo for various symbols
+#define DO_SYMBOLS \
+	DO_SYMBOL(quote) \
+	DO_SYMBOL(quasiquote) \
+	DO_SYMBOL(comma) \
+	DO_SYMBOL(define) \
+	DO_SYMBOL(lambda) \
+	DO_SYMBOL(if)
+
+#define DO_SYMBOL(name) struct Object sym_ ## name;
+DO_SYMBOLS
+#undef DO_SYMBOL
+
+void scheme_init_symbols() {
+#define INTERN_SYMBOL_X(name, name_str) sym_ ## name = scheme_intern(name_str);
+#define DO_SYMBOL(name) INTERN_SYMBOL_X(name, ESCAPEQUOTE(name))
+DO_SYMBOLS
+#undef DO_SYMBOL
+}
+
+#undef DO_SYMBOLS
+
 /*
  * Global Variables
  *
@@ -390,8 +416,6 @@ loop:
 //#define DEBUG
 #ifdef DEBUG
 
-#define DOUBLEESCAPE(a) #a
-#define ESCAPEQUOTE(a) DOUBLEESCAPE(a)
 #define READ_LBL_X(lbl, lblnm) lbl: fprintf(stderr, "[DEBUG] scheme_read: %s\n", lblnm);
 #define READ_LBL(lbl) READ_LBL_X(lbl, ESCAPEQUOTE(lbl))
 
@@ -571,19 +595,19 @@ READ_LBL(read_symbol_char)
 READ_LBL(read_quote)
 	x = scheme_read(line_no);
 	x = scheme_cons(x, (struct Object){ .tag = T_NIL });
-	x = scheme_cons(scheme_intern("quote"), x);
+	x = scheme_cons(sym_quote, x);
 	return x;
 
 READ_LBL(read_quasiquote)
 	x = scheme_read(line_no);
 	x = scheme_cons(x, (struct Object){ .tag = T_NIL });
-	x = scheme_cons(scheme_intern("quasiquote"), x);
+	x = scheme_cons(sym_quasiquote, x);
 	return x;
 
 READ_LBL(read_comma)
 	x = scheme_read(line_no);
 	x = scheme_cons(x, (struct Object){ .tag = T_NIL });
-	x = scheme_cons(scheme_intern("comma"), x);
+	x = scheme_cons(sym_comma, x);
 	return x;	
 }
 
@@ -659,7 +683,7 @@ int scheme_shape_define(struct Object exp) {
 	return
 		exp.tag == T_CONS &&
 		exp.cons.car->tag == T_SYMBOL &&
-		scheme_eq(scheme_intern("define"), *exp.cons.car) &&
+		scheme_eq(sym_define, *exp.cons.car) &&
 		exp.cons.cdr->tag == T_CONS &&
 		exp.cons.cdr->cons.cdr->tag == T_CONS;
 }
@@ -688,6 +712,8 @@ int main(int argc, char **argv) {
 	struct Root *rt;
 	
 	int line_no = 0;
+
+	scheme_init_symbols();
 	
 	do {
 		x = scheme_read(&line_no);
