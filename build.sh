@@ -1,2 +1,2 @@
 #!/bin/sh
-cc -o scheme scheme.c
+cc -Wall -Werror -pedantic -o scheme scheme.c

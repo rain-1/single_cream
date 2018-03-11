@@ -190,6 +190,8 @@ void scheme_gc_forward(struct Object *obj) {
 	case T_GC_FWD:
 		*obj = *(obj->gc_fwd.ptr);
 		break;
+	default:
+		break;
 	}
 }
 
@@ -382,6 +384,8 @@ READ_LBL(read_start)
 	case '\n':
 	case '\t':
 		goto read_start;
+	case ';':
+		goto read_comment;
 	case '(':
 		return scheme_read_many();
 	case ')':
@@ -402,6 +406,17 @@ READ_LBL(read_start)
 			goto read_number;
 		else
 			goto read_symbol;
+	}
+
+READ_LBL(read_comment)
+	c = fgetc(stdin);
+	switch(c) {
+	case EOF:
+		return (struct Object){ .tag = T_EOF };
+	case '\n':
+		goto read_start;
+	default:
+		goto read_comment;
 	}
 
 READ_LBL(read_hash)
@@ -537,6 +552,8 @@ READ_LBL(read_many)
 	case '\n':
 	case '\t':
 		goto read_many;
+	case ';':
+		goto read_comment;
 	case ')':
 		return (struct Object){ .tag = T_NIL };
 	case '.':
@@ -547,6 +564,18 @@ READ_LBL(read_many)
 		x = scheme_read();
 		xs = scheme_read_many();
 		return scheme_cons(x, xs);
+	}
+
+READ_LBL(read_comment)
+	c = fgetc(stdin);
+	switch(c) {
+	case EOF:
+		fprintf(stderr, "scheme_read_many: early EOF.\n");
+		exit(1);
+	case '\n':
+		goto read_many;
+	default:
+		goto read_comment;
 	}
 
 READ_LBL(read_finish)
