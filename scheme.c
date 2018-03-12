@@ -57,42 +57,62 @@ struct Object {
  * Prototypes
  */
 
+// gc
+#define MAX_CELLS 4096
+struct Object *gc_from_heap;
+struct Object *gc_to_heap;
+void scheme_init_gc();
 struct Object scheme_cons(struct Object car, struct Object cdr);
 struct Root *scheme_gc_add_root(struct Object obj);
 void scheme_gc_delete_root(struct Root *rt);
 void scheme_gc();
 
+// symbols
+#define MAX_SYMBOLS 4096
+char **symbol_table;
 struct Object scheme_intern(char *name);
 char *scheme_symbol_name(int id);
 void scheme_init_symbols();
 
-void scheme_display(struct Object x);
-
-struct Object scheme_read(int *line_no);
-
+// globals
 #define MAX_GLOBALS 4096
-int global_id_table[MAX_GLOBALS];
-struct Object global_val_table[MAX_GLOBALS];
+int *global_id_table;
+struct Object *global_val_table;
 int global_table_size = 0;
-
+void scheme_init_globals();
 int scheme_intern_global(int name);
 struct Object scheme_get_global(int gid);
 void scheme_set_global(int gid, struct Object val);
 
+// display
+int scheme_eq(struct Object x, struct Object y);
+void scheme_display(struct Object x);
+
+// reader
+struct Object scheme_read(int *line_no);
+
+// eval
 struct Object scheme_eval(struct Object exp, struct Object env);
+
+void scheme_init() {
+	scheme_init_gc();
+	scheme_init_symbols();
+	scheme_init_globals();
+}
 
 /*
  * The heap
  *
  */
 
-#define MAX_CELLS 4096
-struct Object gc_heap_a[MAX_CELLS];
-struct Object gc_heap_b[MAX_CELLS];
-
-struct Object *gc_from_heap = gc_heap_a;
-struct Object *gc_to_heap = gc_heap_b;
 int gc_free = 0;
+
+void scheme_init_gc() {
+	gc_from_heap = calloc(MAX_CELLS, sizeof(struct Object));
+	assert(gc_from_heap);
+	gc_to_heap = calloc(MAX_CELLS, sizeof(struct Object));
+	assert(gc_to_heap);
+}
 
 struct Object scheme_cons(struct Object car, struct Object cdr) {
 	struct Object ret;
@@ -218,9 +238,40 @@ void scheme_gc_forward(struct Object *obj) {
  * Symbol table
  */
 
-#define MAX_SYMBOLS 4096
-char symbol_table[MAX_SYMBOLS][64];
 int symbol_table_size = 0;
+
+// provide sym_foo for various symbols
+#define DO_SYMBOLS \
+	DO_SYMBOL(quote) \
+	DO_SYMBOL(quasiquote) \
+	DO_SYMBOL(comma) \
+	DO_SYMBOL(define) \
+	DO_SYMBOL(lambda) \
+	DO_SYMBOL(if)
+
+#define DO_SYMBOL(name) struct Object sym_ ## name;
+DO_SYMBOLS
+#undef DO_SYMBOL
+
+void scheme_init_symbols() {
+	int i;
+	char *slab;
+
+	slab = calloc(MAX_SYMBOLS, 64);
+	assert(slab);
+	symbol_table = calloc(MAX_SYMBOLS, sizeof(char*));
+	assert(symbol_table);
+	for(i = 0; i < MAX_SYMBOLS; i++) {
+		symbol_table[i] = slab + 64*i;
+	}
+
+#define INTERN_SYMBOL_X(name, name_str) sym_ ## name = scheme_intern(name_str);
+#define DO_SYMBOL(name) INTERN_SYMBOL_X(name, ESCAPEQUOTE(name))
+DO_SYMBOLS
+#undef DO_SYMBOL
+}
+
+#undef DO_SYMBOLS
 
 struct Object scheme_intern(char *name) {
 	int i;
@@ -251,34 +302,19 @@ char *scheme_symbol_name(int id) {
 	return symbol_table[id];
 }
 
-// provide sym_foo for various symbols
-#define DO_SYMBOLS \
-	DO_SYMBOL(quote) \
-	DO_SYMBOL(quasiquote) \
-	DO_SYMBOL(comma) \
-	DO_SYMBOL(define) \
-	DO_SYMBOL(lambda) \
-	DO_SYMBOL(if)
-
-#define DO_SYMBOL(name) struct Object sym_ ## name;
-DO_SYMBOLS
-#undef DO_SYMBOL
-
-void scheme_init_symbols() {
-#define INTERN_SYMBOL_X(name, name_str) sym_ ## name = scheme_intern(name_str);
-#define DO_SYMBOL(name) INTERN_SYMBOL_X(name, ESCAPEQUOTE(name))
-DO_SYMBOLS
-#undef DO_SYMBOL
-}
-
-#undef DO_SYMBOLS
-
 /*
  * Global Variables
  *
  */
 
 // TODO: How to check if a global is undefined?
+
+void scheme_init_globals() {
+	global_id_table = calloc(MAX_GLOBALS, sizeof(int));
+	assert(global_id_table);
+	global_val_table = calloc(MAX_GLOBALS, sizeof(struct Object));
+	assert(global_val_table);
+}
 
 int scheme_intern_global(int id) {
 	int i;
@@ -590,7 +626,7 @@ READ_LBL(read_symbol_char)
 		fprintf(stderr, "scheme_read: early EOF in read_symbol_char on line %d.\n", *line_no);
 		exit(1);
 	}
-	else if(c == ')' || c == ' ' || c == '\n' || c == '\t') {
+	else if(c == '(' || c == ')' || c == ' ' || c == '\n' || c == '\t') {
 		ungetc(c, stdin);
 		return scheme_intern(read_symbol_buf);
 	}
@@ -738,7 +774,7 @@ int main(int argc, char **argv) {
 	
 	int line_no = 0;
 
-	scheme_init_symbols();
+	scheme_init();
 	
 	do {
 		x = scheme_read(&line_no);
