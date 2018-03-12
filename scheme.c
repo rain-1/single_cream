@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <assert.h>
+
 #define DOUBLEESCAPE(a) #a
 #define ESCAPEQUOTE(a) DOUBLEESCAPE(a)
 
@@ -68,11 +70,16 @@ void scheme_display(struct Object x);
 
 struct Object scheme_read(int *line_no);
 
-int scheme_global_intern(char *name);
+#define MAX_GLOBALS 4096
+int global_id_table[MAX_GLOBALS];
+struct Object global_val_table[MAX_GLOBALS];
+int global_table_size = 0;
+
+int scheme_intern_global(int name);
 struct Object scheme_get_global(int gid);
 void scheme_set_global(int gid, struct Object val);
 
-void scheme_eval(struct Object exp, struct Object env);
+struct Object scheme_eval(struct Object exp, struct Object env);
 
 /*
  * The heap
@@ -158,6 +165,7 @@ void scheme_gc_forward(struct Object *obj);
 
 void scheme_gc() {
 	struct Root *rt;
+	int gid;
 	
 	gc_free = 0;
 	gc_scan = 0;
@@ -169,7 +177,9 @@ void scheme_gc() {
 		scheme_gc_forward(&rt->obj);
 	}
 	
-	// TODO: also process the globals as roots
+	for(gid = 0; gid < global_table_size; gid++) {
+		scheme_gc_forward(&global_val_table[gid]);
+	}
 	
 	for(; gc_scan < gc_free; gc_scan++) {
 		scheme_gc_forward(&gc_from_heap[gc_scan]);
@@ -268,15 +278,10 @@ DO_SYMBOLS
  *
  */
 
-#define MAX_GLOBALS 4096
-int global_id_table[MAX_GLOBALS];
-struct Object global_val_table[MAX_GLOBALS];
-int global_table_size = 0;
+// TODO: How to check if a global is undefined?
 
-int scheme_global_intern(char *name) {
-	int id, i;
-	
-	id = scheme_intern(name).symbol.id;
+int scheme_intern_global(int id) {
+	int i;
 	
 	for(i = 0; i < global_table_size; i++) {
 		if(global_id_table[i] == id) {
@@ -341,6 +346,7 @@ int scheme_eq(struct Object x, struct Object y) {
 		return x.cons.car == y.cons.car && x.cons.cdr == y.cons.cdr;
 	case T_STRING:
 		return x.string.len == y.string.len && x.string.text == y.string.text;
+
 	default:
 		return 0;
 	}
@@ -360,6 +366,7 @@ void scheme_display(struct Object x) {
 		fprintf(stdout, "#<EOF>");
 		break;
 	case T_SYMBOL:
+//		fprintf(stdout, "%s:%d", scheme_symbol_name(x.symbol.id), x.symbol.id);
 		fprintf(stdout, "%s", scheme_symbol_name(x.symbol.id));
 		break;
 	case T_NUMBER:
@@ -688,12 +695,30 @@ int scheme_shape_define(struct Object exp) {
 		exp.cons.cdr->cons.cdr->tag == T_CONS;
 }
 
-void scheme_eval(struct Object exp, struct Object env) {
+struct Object scheme_eval(struct Object exp, struct Object env) {
+	int gid;
+	
+	struct Object def_name;
+	struct Object def_body;
+
 	if(scheme_shape_define(exp)) {
-		puts("def");
+		def_name = *exp.cons.cdr->cons.car;
+		def_body = *exp.cons.cdr->cons.cdr->cons.car;
+
+		assert(def_name.tag == T_SYMBOL);
+		gid = scheme_intern_global(def_name.symbol.id);
+		exp = scheme_eval(def_body, env);
+		scheme_set_global(gid, exp);
+
+		return exp;
+	}
+	else if(exp.tag == T_SYMBOL) {
+		gid = scheme_intern_global(exp.symbol.id);
+
+		return scheme_get_global(gid);
 	}
 	else {
-		puts("exp");
+		return exp;
 	}
 }
 
@@ -718,20 +743,15 @@ int main(int argc, char **argv) {
 	do {
 		x = scheme_read(&line_no);
 		if(x.tag == T_EOF) break;
-
 		rt = scheme_gc_add_root(x);
 
 		scheme_display(rt->obj);
 		puts("");
 
-		scheme_eval(rt->obj, (struct Object){ .tag = T_NIL });
-
-		scheme_gc();
-		
-//		scheme_display(rt->obj);
-//		puts("");
-
+		scheme_display(scheme_eval(rt->obj, (struct Object){ .tag = T_NIL }));
+		puts("");
 		scheme_gc_delete_root(rt);
+		scheme_gc();
 	} while(1);
 	
 	return 0;
