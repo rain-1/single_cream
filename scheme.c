@@ -14,8 +14,8 @@
  */
 
 enum ObjectType {
-	T_TRUE,
 	T_FALSE,
+	T_TRUE,
 	T_EOF,
 	T_SYMBOL,
 	T_NUMBER,
@@ -23,6 +23,8 @@ enum ObjectType {
 	T_STRING,
 	T_NIL,
 	T_CONS,
+	
+	T_CLOSURE,
 	
 	T_GC_FWD,
 };
@@ -48,6 +50,11 @@ struct Object {
 			struct Object *cdr;
 		} cons;
 		struct {
+			struct Object *args;
+			struct Object *body;
+			struct Object *env;
+		} closure;
+		struct {
 			struct Object *ptr;
 		} gc_fwd;
 	};
@@ -63,6 +70,7 @@ struct Object *gc_from_heap;
 struct Object *gc_to_heap;
 void scheme_init_gc();
 struct Object scheme_cons(struct Object car, struct Object cdr);
+struct Object scheme_make_closure(struct Object args, struct Object body, struct Object env);
 struct Root *scheme_gc_add_root(struct Object obj);
 void scheme_gc_delete_root(struct Root *rt);
 void scheme_gc();
@@ -118,7 +126,7 @@ struct Object scheme_cons(struct Object car, struct Object cdr) {
 	struct Object ret;
 	
 	if(gc_free + 2 > MAX_CELLS) {
-		fprintf(stderr, "scheme_cons: ran out of cons cells.\n");
+		fprintf(stderr, "scheme_cons: ran out of cells.\n");
 		exit(1);
 	}
 
@@ -130,6 +138,31 @@ struct Object scheme_cons(struct Object car, struct Object cdr) {
 	
 	gc_from_heap[gc_free] = cdr;
 	ret.cons.cdr = &gc_from_heap[gc_free];
+	gc_free++;
+
+	return ret;
+}
+
+struct Object scheme_make_closure(struct Object args, struct Object body, struct Object env) {
+	struct Object ret;
+	
+	if(gc_free + 3 > MAX_CELLS) {
+		fprintf(stderr, "scheme_make_closure: ran out of cells.\n");
+		exit(1);
+	}
+
+	ret = (struct Object){ .tag = T_CLOSURE };
+	
+	gc_from_heap[gc_free] = args;
+	ret.closure.args = &gc_from_heap[gc_free];
+	gc_free++;
+	
+	gc_from_heap[gc_free] = body;
+	ret.closure.body = &gc_from_heap[gc_free];
+	gc_free++;
+
+	gc_from_heap[gc_free] = env;
+	ret.closure.env = &gc_from_heap[gc_free];
 	gc_free++;
 
 	return ret;
@@ -181,7 +214,7 @@ void scheme_gc_delete_root(struct Root *rt) {
 
 void scheme_gc_forward(struct Object *obj);
 
-//#define DEBUG_GC
+#define DEBUG_GC
 
 void scheme_gc() {
 	struct Root *rt;
@@ -212,6 +245,7 @@ void scheme_gc() {
 
 void scheme_gc_forward(struct Object *obj) {
 	struct Object *old_car, *old_cdr;
+	struct Object *old_args, *old_body, *old_env;
 
 #ifdef DEBUG_GC
 	scheme_display(*obj);
@@ -221,10 +255,31 @@ void scheme_gc_forward(struct Object *obj) {
 	switch(obj->tag) {
 	case T_CONS:
 		old_car = obj->cons.car;
-		old_cdr = obj->cons.cdr;
-		*obj = scheme_cons(*old_car, *old_cdr);
+		scheme_gc_forward(obj->cons.car);
 		*old_car = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->cons.car };
+
+		old_cdr = obj->cons.cdr;
+		scheme_gc_forward(obj->cons.cdr);
 		*old_cdr = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->cons.cdr };
+
+		*obj = scheme_cons(*obj->cons.car, *obj->cons.cdr);
+
+		break;
+	case T_CLOSURE:
+		old_args = obj->closure.args;
+		scheme_gc_forward(obj->closure.args);
+		*old_args = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->closure.args };
+
+		old_body = obj->closure.body;
+		scheme_gc_forward(obj->closure.body);
+		*old_body = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->closure.body };
+
+		old_env = obj->closure.env;
+		scheme_gc_forward(obj->closure.env);
+		*old_env = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->closure.env };
+
+		*obj = scheme_make_closure(*obj->closure.args, *obj->closure.body, *obj->closure.env);
+
 		break;
 	case T_GC_FWD:
 		*obj = *(obj->gc_fwd.ptr);
@@ -247,7 +302,8 @@ int symbol_table_size = 0;
 	DO_SYMBOL(comma) \
 	DO_SYMBOL(define) \
 	DO_SYMBOL(lambda) \
-	DO_SYMBOL(if)
+	DO_SYMBOL(if) \
+	DO_SYMBOL(begin)
 
 #define DO_SYMBOL(name) struct Object sym_ ## name;
 DO_SYMBOLS
@@ -383,6 +439,12 @@ int scheme_eq(struct Object x, struct Object y) {
 	case T_STRING:
 		return x.string.len == y.string.len && x.string.text == y.string.text;
 
+	case T_CLOSURE:
+		return
+			x.closure.args == y.closure.args &&
+			x.closure.body == y.closure.body &&
+			x.closure.env == y.closure.env;
+
 	default:
 		return 0;
 	}
@@ -445,8 +507,16 @@ loop:
 			break;
 		}
 		break;
+	case T_CLOSURE:
+		fprintf(stdout, "#<closure>");
+		break;
+	case T_GC_FWD:
+		fprintf(stdout, "#<GCFWD[");
+//		scheme_display(*x.gc_fwd.ptr);
+		fprintf(stdout, "]>");
+		break;
 	default:
-		fprintf(stderr, "scheme_display: unknown object.\n");
+		fprintf(stderr, "scheme_display: unknown object [%d].\n", x.tag);
 		exit(1);
 	}
 }
@@ -720,32 +790,122 @@ READ_LBL(read_finish)
 int scheme_shape_define(struct Object exp) {
 // (define (def? exp)
 //   (and (pair? exp)
-//        (eq? 'define (car exp))
+//        (eq? (car exp) 'define)
 //        (pair? (cdr exp))
 //        (pair? (cddr exp)))
 	return
 		exp.tag == T_CONS &&
-		exp.cons.car->tag == T_SYMBOL &&
-		scheme_eq(sym_define, *exp.cons.car) &&
+		scheme_eq(*exp.cons.car, sym_define) &&
 		exp.cons.cdr->tag == T_CONS &&
 		exp.cons.cdr->cons.cdr->tag == T_CONS;
 }
 
-struct Object scheme_eval(struct Object exp, struct Object env) {
-	int gid;
-	
-	struct Object def_name;
-	struct Object def_body;
+int scheme_shape_if(struct Object exp) {
+// (define (if? exp)
+//   (and (pair? exp)
+//        (eq? (car exp) 'if)
+//        (pair? (cdr exp))
+//        (pair? (cddr exp))
+//        (pair? (cdddr exp))
+//        (null? (cddddr exp))))
+	return
+		exp.tag == T_CONS &&
+		scheme_eq(*exp.cons.car, sym_if) &&
+		exp.cons.cdr->tag == T_CONS &&
+		exp.cons.cdr->cons.cdr->tag == T_CONS &&
+		exp.cons.cdr->cons.cdr->cons.cdr->tag == T_CONS &&
+		exp.cons.cdr->cons.cdr->cons.cdr->cons.cdr->tag == T_NIL;
+}
 
+int scheme_shape_quote(struct Object exp) {
+// (define (quote? exp)
+//   (and (pair? exp)
+//        (eq? (car exp) 'quote)
+//        (pair? (cdr exp))
+//        (null? (cddr exp))))
+	return
+		exp.tag == T_CONS &&
+		scheme_eq(*exp.cons.car, sym_quote) &&
+		exp.cons.cdr->tag == T_CONS &&
+		exp.cons.cdr->cons.cdr->tag == T_NIL;
+}
+
+int scheme_shape_lambda(struct Object exp) {
+// (define (lambda? exp)
+//   (and (pair? exp)
+//        (eq? (car exp) 'lambda)
+//        (pair? (cdr exp))
+//        (pair? (cddr exp))))
+	return
+		exp.tag == T_CONS &&
+		scheme_eq(*exp.cons.car, sym_lambda) &&
+		exp.cons.cdr->tag == T_CONS &&
+		exp.cons.cdr->cons.cdr->tag == T_CONS;
+}
+
+int scheme_self_evaluating(enum ObjectType tag) {
+	return
+		tag == T_TRUE ||
+		tag == T_FALSE ||
+		tag == T_EOF ||
+		tag == T_NUMBER ||
+		tag == T_CHARACTER ||
+		tag == T_STRING ||
+		tag == T_NIL;
+}
+
+struct Object scheme_execute(struct Object exp, struct Object env) {
 	if(scheme_shape_define(exp)) {
+		struct Object def_name;
+		struct Object def_body;
+		int gid;
+		
 		def_name = *exp.cons.cdr->cons.car;
 		def_body = *exp.cons.cdr->cons.cdr->cons.car;
+
+		// TODO: desugar (define (f args ...) ...)
 
 		assert(def_name.tag == T_SYMBOL);
 		gid = scheme_intern_global(def_name.symbol.id);
 		exp = scheme_eval(def_body, env);
 		scheme_set_global(gid, exp);
+		// GC note: exp is now rooted
 
+		return exp;
+	}
+	else {
+		exp = scheme_eval(exp, env);
+
+		scheme_display(exp);
+		puts("");
+		
+		return exp;
+	}
+}
+
+// TODO: this is not ok. we cannot mutate like this
+void scheme_evlist_bang(struct Object exp, struct Object env) {
+evlist_loop:
+	if(exp.tag == T_NIL)
+		return;
+
+	if(exp.tag != T_CONS) {
+		fprintf(stderr, "scheme_evlist: not a list [%d].\n", exp.tag);
+		exit(1);
+	}
+	
+	*exp.cons.car = scheme_eval(*exp.cons.car, env);
+	
+	exp = *exp.cons.cdr;
+	goto evlist_loop;
+}
+
+struct Object scheme_eval(struct Object exp, struct Object env) {
+	int gid;
+	struct Object res;
+
+eval_continue:
+	if(scheme_self_evaluating(exp.tag)) {
 		return exp;
 	}
 	else if(exp.tag == T_SYMBOL) {
@@ -753,9 +913,72 @@ struct Object scheme_eval(struct Object exp, struct Object env) {
 
 		return scheme_get_global(gid);
 	}
-	else {
-		return exp;
+	else if(exp.tag == T_CONS && scheme_eq(*exp.cons.car, sym_quote)) {
+		assert(scheme_shape_quote(exp));
+		
+		return *exp.cons.cdr->cons.car;
 	}
+	else if(exp.tag == T_CONS && scheme_eq(*exp.cons.car, sym_begin)) {
+		do {
+			exp = *exp.cons.cdr;
+			assert(exp.tag == T_CONS);
+			
+			res = scheme_eval(*exp.cons.car, env);
+			// GC note: allow res to be GC'd
+
+			if(exp.cons.cdr->tag == T_NIL)
+				return res;
+		} while(1);
+	}
+	else if(exp.tag == T_CONS && scheme_eq(*exp.cons.car, sym_if)) {
+		struct Object if_test, if_consequent, if_antecedent;
+
+		assert(scheme_shape_if(exp));
+
+		if_test = *exp.cons.cdr->cons.car;
+		if_consequent = *exp.cons.cdr->cons.cdr->cons.car;
+		if_antecedent = *exp.cons.cdr->cons.cdr->cons.cdr->cons.car;
+		// GC note: allow if_test to be GC'd
+
+		res = scheme_eval(if_test, env);
+		if(res.tag == T_FALSE) {
+			exp = if_antecedent;
+		}
+		else {
+			exp = if_consequent;
+		}
+		
+		goto eval_continue;
+	}
+	else if(exp.tag == T_CONS && scheme_eq(*exp.cons.car, sym_lambda)) {
+		struct Object lambda_args, lambda_body;
+				
+		assert(scheme_shape_lambda(exp));
+		
+		lambda_args = *exp.cons.cdr->cons.car;
+		lambda_body = *exp.cons.cdr->cons.cdr;
+		lambda_body = *exp.cons.cdr->cons.cdr->cons.car;
+		// TODO: implicit begin
+		// GC note: implicit begin needs to be rooted
+		
+		return scheme_make_closure(lambda_args, lambda_body, env);
+	}
+	else if(exp.tag == T_CONS) {
+		// function application
+		
+		// TODO: this one will have to set up a root, then nondestructively evlist
+		
+		// GC note: we overwrite the elements of the list "exp"
+		// so everything is rooted and preserved
+		//exp = scheme_evlist_bang(exp, env);
+		
+		// TODO: perform the application
+		
+		return sym_if;
+	}
+
+	fprintf(stderr, "scheme_eval: error unhandled object type %d.\n", exp.tag);
+	exit(1);
 }
 
 /*
@@ -784,8 +1007,7 @@ int main(int argc, char **argv) {
 		scheme_display(rt->obj);
 		puts("");
 
-		scheme_display(scheme_eval(rt->obj, (struct Object){ .tag = T_NIL }));
-		puts("");
+		scheme_execute(rt->obj, (struct Object){ .tag = T_NIL });
 		scheme_gc_delete_root(rt);
 		scheme_gc();
 	} while(1);
