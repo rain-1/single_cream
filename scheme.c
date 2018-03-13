@@ -14,19 +14,19 @@
  */
 
 enum ObjectType {
-	T_FALSE,
-	T_TRUE,
-	T_EOF,
-	T_SYMBOL,
-	T_NUMBER,
-	T_CHARACTER,
-	T_STRING,
-	T_NIL,
-	T_CONS,
+	T_FALSE = 0,
+	T_TRUE = 1,
+	T_EOF = 2,
+	T_SYMBOL = 3,
+	T_NUMBER = 4,
+	T_CHARACTER = 5,
+	T_STRING = 6,
+	T_NIL = 7,
+	T_CONS = 8,
 	
-	T_CLOSURE,
+	T_CLOSURE = 9,
 	
-	T_GC,
+	T_GC = 0xFF,
 };
 
 struct Object {
@@ -97,7 +97,7 @@ int *global_id_table;
 struct Object *global_val_table;
 int global_table_size = 0;
 void scheme_init_globals();
-int scheme_intern_global(int name);
+int scheme_intern_global(int name, int *was_defined);
 struct Object scheme_get_global(int gid);
 void scheme_set_global(int gid, struct Object val);
 
@@ -202,7 +202,7 @@ void scheme_gc(void) {
 	
 	// swap spaces
 #define SWAP(x,y) do { struct Object *tmp = x; x = y; y = tmp; } while(0)
-	SWAP(gc_to_space, gc_from_space);	
+	SWAP(gc_to_space, gc_from_space);
 	// all our objects are now in the from space
 	gc_free_ptr = gc_to_space;
 	gc_scan_ptr = gc_to_space;
@@ -212,7 +212,6 @@ void scheme_gc(void) {
 	for(rt = gc_roots; rt; rt = rt->next) {
 		scheme_gc_forward(&rt->obj);
 	}
-	
 	for(gid = 0; gid < global_table_size; gid++) {
 		scheme_gc_forward(&global_val_table[gid]);
 	}
@@ -234,6 +233,9 @@ struct Object *scheme_gc_copy(struct Object *obj) {
 	
 	struct Object *res;
 	
+	if(obj->tag == T_GC) {
+		return obj->gc.ptr;
+	}
 	if(scheme_gc_ptr_inside_from_space(obj)) {
 		res = scheme_gc_alloc();
 		*res = *obj;
@@ -241,6 +243,8 @@ struct Object *scheme_gc_copy(struct Object *obj) {
 		return res;
 	}
 	else {
+		// TODO: is this ever reached
+		// puts("REACHED");
 		return obj;
 	}
 }
@@ -265,8 +269,10 @@ void scheme_gc_forward(struct Object *obj) {
 		obj->closure.body = scheme_gc_copy(obj->closure.body);
 		obj->closure.env = scheme_gc_copy(obj->closure.env);
 		break;
+	case T_GC:
+		break;
 	default:
-		fprintf(stderr, "gc: fell through in gc_forward\n");
+		fprintf(stderr, "gc: fell through in gc_forward [%d]\n", obj->tag);
 		exit(1);
 	}
 }
@@ -345,8 +351,6 @@ char *scheme_symbol_name(int id) {
  *
  */
 
-// TODO: How to check if a global is undefined?
-
 void scheme_init_globals() {
 	global_id_table = calloc(MAX_GLOBALS, sizeof(int));
 	assert(global_id_table);
@@ -354,11 +358,12 @@ void scheme_init_globals() {
 	assert(global_val_table);
 }
 
-int scheme_intern_global(int id) {
+int scheme_intern_global(int id, int *was_defined) {
 	int i;
 	
 	for(i = 0; i < global_table_size; i++) {
 		if(global_id_table[i] == id) {
+			if(was_defined) *was_defined = 1;
 			return i;
 		}
 	}
@@ -373,6 +378,7 @@ int scheme_intern_global(int id) {
 
 	global_table_size++;
 	
+	if(was_defined) *was_defined = 0;
 	return i;
 }
 
@@ -415,12 +421,14 @@ int scheme_eq(struct Object x, struct Object y) {
 		return x.number.val == y.number.val;
 	case T_CHARACTER:
 		return x.character.val == y.character.val;
-
 	case T_CONS:
-		return x.cons.car == y.cons.car && x.cons.cdr == y.cons.cdr;
+		return
+			x.cons.car == y.cons.car &&
+			x.cons.cdr == y.cons.cdr;
 	case T_STRING:
-		return x.string.len == y.string.len && x.string.text == y.string.text;
-
+		return
+			x.string.len == y.string.len &&
+			x.string.text == y.string.text;
 	case T_CLOSURE:
 		return
 			x.closure.args == y.closure.args &&
@@ -491,11 +499,12 @@ loop:
 		break;
 	case T_CLOSURE:
 		fprintf(stdout, "#<closure>");
+//		fprintf(stdout, "#<closure:body=");
+//		scheme_display(*x.closure.body);
+//		fprintf(stdout,">");
 		break;
 	case T_GC:
-		fprintf(stdout, "#<GCFWD[");
-//		scheme_display(*x.gc.ptr);
-		fprintf(stdout, "]>");
+		fprintf(stdout, "#<gcfwd>");
 		break;
 	default:
 		fprintf(stderr, "scheme_display: unknown object [%d].\n", x.tag);
@@ -868,7 +877,7 @@ struct Object scheme_execute(struct Object exp, struct Object env) {
 		// TODO: desugar (define (f args ...) ...)
 
 		assert(def_name.tag == T_SYMBOL);
-		gid = scheme_intern_global(def_name.symbol.id);
+		gid = scheme_intern_global(def_name.symbol.id, NULL);
 		exp = scheme_eval(def_body, env);
 		scheme_set_global(gid, exp);
 		// GC note: exp is now rooted
@@ -885,21 +894,27 @@ struct Object scheme_execute(struct Object exp, struct Object env) {
 	}
 }
 
-// TODO: this is not ok. we cannot mutate like this
-void scheme_evlist_bang(struct Object exp, struct Object env) {
-evlist_loop:
+struct Object scheme_evlist(struct Object exp, struct Object env) {
+	struct Object res;
+	struct Root *x_rt, *xs_rt;
+	
 	if(exp.tag == T_NIL)
-		return;
+		return (struct Object){ .tag = T_NIL };
 
 	if(exp.tag != T_CONS) {
 		fprintf(stderr, "scheme_evlist: not a list [%d].\n", exp.tag);
 		exit(1);
 	}
+
+	x_rt = scheme_gc_add_root(scheme_eval(*exp.cons.car, env));
+	xs_rt = scheme_gc_add_root(scheme_evlist(*exp.cons.cdr, env));
+
+	res = scheme_cons(x_rt->obj, xs_rt->obj);
 	
-	*exp.cons.car = scheme_eval(*exp.cons.car, env);
-	
-	exp = *exp.cons.cdr;
-	goto evlist_loop;
+	scheme_gc_delete_root(x_rt);
+	scheme_gc_delete_root(xs_rt);
+
+	return res;
 }
 
 struct Object scheme_eval(struct Object exp, struct Object env) {
@@ -911,7 +926,7 @@ eval_continue:
 		return exp;
 	}
 	else if(exp.tag == T_SYMBOL) {
-		gid = scheme_intern_global(exp.symbol.id);
+		gid = scheme_intern_global(exp.symbol.id, NULL);
 
 		return scheme_get_global(gid);
 	}
@@ -959,6 +974,7 @@ eval_continue:
 		
 		lambda_args = *exp.cons.cdr->cons.car;
 		lambda_body = *exp.cons.cdr->cons.cdr;
+
 		lambda_body = *exp.cons.cdr->cons.cdr->cons.car;
 		// TODO: implicit begin
 		// GC note: implicit begin needs to be rooted
@@ -968,15 +984,23 @@ eval_continue:
 	else if(exp.tag == T_CONS) {
 		// function application
 		
-		// TODO: this one will have to set up a root, then nondestructively evlist
+		struct Root *rt;
+		struct Object *func, *args;
 		
-		// GC note: we overwrite the elements of the list "exp"
-		// so everything is rooted and preserved
-		//exp = scheme_evlist_bang(exp, env);
+		exp = scheme_evlist(exp, env);
+		rt = scheme_gc_add_root(exp);
 		
-		// TODO: perform the application
+		func = rt->obj.cons.car;
+//		args = rt->obj.cons.cdr;
+		assert(func->tag == T_CLOSURE);
 		
-		return sym_if;
+		// TODO: extend env with *func.closure.args
+		exp = *func->closure.body;
+		env = *func->closure.env;
+		
+		scheme_gc_delete_root(rt);
+		
+		goto eval_continue;
 	}
 
 	fprintf(stderr, "scheme_eval: error unhandled object type %d.\n", exp.tag);
