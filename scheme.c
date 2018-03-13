@@ -26,7 +26,7 @@ enum ObjectType {
 	
 	T_CLOSURE,
 	
-	T_GC_FWD,
+	T_GC,
 };
 
 struct Object {
@@ -56,8 +56,14 @@ struct Object {
 		} closure;
 		struct {
 			struct Object *ptr;
-		} gc_fwd;
+		} gc;
 	};
+};
+
+struct Root {
+	struct Root *prev;
+	struct Root *next;
+	struct Object obj;
 };
 
 /*
@@ -65,15 +71,18 @@ struct Object {
  */
 
 // gc
-#define MAX_CELLS 4096
-struct Object *gc_from_heap;
-struct Object *gc_to_heap;
-void scheme_init_gc();
-struct Object scheme_cons(struct Object car, struct Object cdr);
-struct Object scheme_make_closure(struct Object args, struct Object body, struct Object env);
+// TODO: small for testing
+#define SEMISPACE_SIZE 120
+struct Object *gc_to_space, *gc_from_space;
+struct Object *gc_free_ptr, *gc_scan_ptr;
+
+void scheme_init_gc(void);
 struct Root *scheme_gc_add_root(struct Object obj);
-void scheme_gc_delete_root(struct Root *rt);
-void scheme_gc();
+struct Object *scheme_gc_alloc();
+void scheme_gc(void);
+int scheme_gc_ptr_inside_from_space(struct Object *obj);
+struct Object *scheme_gc_copy(struct Object *obj);
+void scheme_gc_forward(struct Object *obj);
 
 // symbols
 #define MAX_SYMBOLS 4096
@@ -100,6 +109,8 @@ void scheme_display(struct Object x);
 struct Object scheme_read(int *line_no);
 
 // eval
+struct Object scheme_cons(struct Object car, struct Object cdr);
+struct Object scheme_closure(struct Object args, struct Object body, struct Object env);
 struct Object scheme_eval(struct Object exp, struct Object env);
 
 void scheme_init() {
@@ -113,69 +124,18 @@ void scheme_init() {
  *
  */
 
-int gc_free = 0;
+void scheme_init_gc(void) {
+	// allocates the two semispaces
+	// sets up the free ptr used for allocation
 
-void scheme_init_gc() {
-	gc_from_heap = calloc(MAX_CELLS, sizeof(struct Object));
-	assert(gc_from_heap);
-	gc_to_heap = calloc(MAX_CELLS, sizeof(struct Object));
-	assert(gc_to_heap);
+	gc_to_space = calloc(SEMISPACE_SIZE, sizeof(struct Object));
+	gc_from_space = calloc(SEMISPACE_SIZE, sizeof(struct Object));
+	
+	gc_free_ptr = gc_to_space;
+	gc_scan_ptr = NULL;
 }
-
-struct Object scheme_cons(struct Object car, struct Object cdr) {
-	struct Object ret;
-	
-	if(gc_free + 2 > MAX_CELLS) {
-		fprintf(stderr, "scheme_cons: ran out of cells.\n");
-		exit(1);
-	}
-
-	ret = (struct Object){ .tag = T_CONS };
-	
-	gc_from_heap[gc_free] = car;
-	ret.cons.car = &gc_from_heap[gc_free];
-	gc_free++;
-	
-	gc_from_heap[gc_free] = cdr;
-	ret.cons.cdr = &gc_from_heap[gc_free];
-	gc_free++;
-
-	return ret;
-}
-
-struct Object scheme_make_closure(struct Object args, struct Object body, struct Object env) {
-	struct Object ret;
-	
-	if(gc_free + 3 > MAX_CELLS) {
-		fprintf(stderr, "scheme_make_closure: ran out of cells.\n");
-		exit(1);
-	}
-
-	ret = (struct Object){ .tag = T_CLOSURE };
-	
-	gc_from_heap[gc_free] = args;
-	ret.closure.args = &gc_from_heap[gc_free];
-	gc_free++;
-	
-	gc_from_heap[gc_free] = body;
-	ret.closure.body = &gc_from_heap[gc_free];
-	gc_free++;
-
-	gc_from_heap[gc_free] = env;
-	ret.closure.env = &gc_from_heap[gc_free];
-	gc_free++;
-
-	return ret;
-}
-
-struct Root {
-	struct Root *prev;
-	struct Root *next;
-	struct Object obj;
-};
 
 struct Root *gc_roots = NULL;
-int gc_scan;
 
 struct Root *scheme_gc_add_root(struct Object obj) {
 	struct Root *rt;
@@ -212,20 +172,43 @@ void scheme_gc_delete_root(struct Root *rt) {
 	free(rt);
 }
 
-void scheme_gc_forward(struct Object *obj);
+struct Object *scheme_gc_alloc_internal(int gc_loop_check) {
+	// allocate 1 Object cell in the to space
 
-#define DEBUG_GC
+	struct Object *res;
+	
+	res = gc_free_ptr;
+	if(gc_free_ptr + 1 < gc_to_space + SEMISPACE_SIZE) {
+		gc_free_ptr++;
+		return res;
+	}
+	else if(gc_loop_check) {
+		fprintf(stderr, "gc: totally out of memory\n");
+		exit(1);
+	}
+	else {
+		scheme_gc();
+		return scheme_gc_alloc_internal(1);
+	}
+}
 
-void scheme_gc() {
+struct Object *scheme_gc_alloc() {
+	return scheme_gc_alloc_internal(0);
+}
+
+void scheme_gc(void) {
 	struct Root *rt;
 	int gid;
 	
-	gc_free = 0;
-	gc_scan = 0;
-
-#define SWAP(a,b) do { struct Object *tmp; tmp = a; a = b; b = tmp; } while(0)
-	SWAP(gc_from_heap, gc_to_heap);
+	// swap spaces
+#define SWAP(x,y) do { struct Object *tmp = x; x = y; y = tmp; } while(0)
+	SWAP(gc_to_space, gc_from_space);	
+	// all our objects are now in the from space
+	gc_free_ptr = gc_to_space;
+	gc_scan_ptr = gc_to_space;
 	
+	// forward all the roots
+	// this will add some objects into the new fresh to space
 	for(rt = gc_roots; rt; rt = rt->next) {
 		scheme_gc_forward(&rt->obj);
 	}
@@ -234,58 +217,57 @@ void scheme_gc() {
 		scheme_gc_forward(&global_val_table[gid]);
 	}
 	
-	for(; gc_scan < gc_free; gc_scan++) {
-		scheme_gc_forward(&gc_from_heap[gc_scan]);
+	// forward those new objects using the scan pointer
+	for(; gc_scan_ptr < gc_free_ptr; gc_scan_ptr++) {
+		scheme_gc_forward(gc_scan_ptr);
 	}
+}
+
+int scheme_gc_ptr_inside_from_space(struct Object *obj) {
+	// check if an object is inside the from space
+	return gc_from_space <= obj && obj < gc_from_space + SEMISPACE_SIZE;
+}
+
+struct Object *scheme_gc_copy(struct Object *obj) {
+	// copy an object from the "from space" to the "to space"
+	// leave behind a gc forwarding pointer
 	
-#ifdef DEBUG_GC
-	printf("[GC] gc_free=%d\n", gc_free);
-#endif
+	struct Object *res;
+	
+	if(scheme_gc_ptr_inside_from_space(obj)) {
+		res = scheme_gc_alloc();
+		*res = *obj;
+		*obj = (struct Object){ .tag = T_GC, .gc.ptr = res };
+		return res;
+	}
+	else {
+		return obj;
+	}
 }
 
 void scheme_gc_forward(struct Object *obj) {
-	struct Object *old_car, *old_cdr;
-	struct Object *old_args, *old_body, *old_env;
-
-#ifdef DEBUG_GC
-	scheme_display(*obj);
-	puts("");
-#endif
-
 	switch(obj->tag) {
+	case T_FALSE:
+	case T_TRUE:
+	case T_EOF:
+	case T_SYMBOL:
+	case T_NUMBER:
+	case T_CHARACTER:
+	case T_STRING:
+	case T_NIL:
+		break;
 	case T_CONS:
-		old_car = obj->cons.car;
-		scheme_gc_forward(obj->cons.car);
-		*old_car = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->cons.car };
-
-		old_cdr = obj->cons.cdr;
-		scheme_gc_forward(obj->cons.cdr);
-		*old_cdr = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->cons.cdr };
-
-		*obj = scheme_cons(*obj->cons.car, *obj->cons.cdr);
-
+		obj->cons.car = scheme_gc_copy(obj->cons.car);
+		obj->cons.cdr = scheme_gc_copy(obj->cons.cdr);
 		break;
 	case T_CLOSURE:
-		old_args = obj->closure.args;
-		scheme_gc_forward(obj->closure.args);
-		*old_args = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->closure.args };
-
-		old_body = obj->closure.body;
-		scheme_gc_forward(obj->closure.body);
-		*old_body = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->closure.body };
-
-		old_env = obj->closure.env;
-		scheme_gc_forward(obj->closure.env);
-		*old_env = (struct Object){ .tag = T_GC_FWD, .gc_fwd.ptr = obj->closure.env };
-
-		*obj = scheme_make_closure(*obj->closure.args, *obj->closure.body, *obj->closure.env);
-
-		break;
-	case T_GC_FWD:
-		*obj = *(obj->gc_fwd.ptr);
+		obj->closure.args = scheme_gc_copy(obj->closure.args);
+		obj->closure.body = scheme_gc_copy(obj->closure.body);
+		obj->closure.env = scheme_gc_copy(obj->closure.env);
 		break;
 	default:
-		break;
+		fprintf(stderr, "gc: fell through in gc_forward\n");
+		exit(1);
 	}
 }
 
@@ -510,9 +492,9 @@ loop:
 	case T_CLOSURE:
 		fprintf(stdout, "#<closure>");
 		break;
-	case T_GC_FWD:
+	case T_GC:
 		fprintf(stdout, "#<GCFWD[");
-//		scheme_display(*x.gc_fwd.ptr);
+//		scheme_display(*x.gc.ptr);
 		fprintf(stdout, "]>");
 		break;
 	default:
@@ -787,6 +769,26 @@ READ_LBL(read_finish)
  *
  */
 
+struct Object scheme_cons(struct Object car, struct Object cdr) {
+	struct Object *car_ptr, *cdr_ptr;
+	car_ptr = scheme_gc_alloc();
+	*car_ptr = car;
+	cdr_ptr = scheme_gc_alloc();
+	*cdr_ptr = cdr;
+	return (struct Object){ .tag = T_CONS, .cons.car = car_ptr, .cons.cdr = cdr_ptr };
+}
+
+struct Object scheme_closure(struct Object args, struct Object body, struct Object env) {
+	struct Object *args_ptr, *body_ptr, *env_ptr;
+	args_ptr = scheme_gc_alloc();
+	*args_ptr = args;
+	body_ptr = scheme_gc_alloc();
+	*body_ptr = body;
+	env_ptr = scheme_gc_alloc();
+	*env_ptr = env;
+	return (struct Object){ .tag = T_CLOSURE, .closure.args = args_ptr, .closure.body = body_ptr, .closure.env = env_ptr };
+}
+
 int scheme_shape_define(struct Object exp) {
 // (define (def? exp)
 //   (and (pair? exp)
@@ -952,7 +954,7 @@ eval_continue:
 	}
 	else if(exp.tag == T_CONS && scheme_eq(*exp.cons.car, sym_lambda)) {
 		struct Object lambda_args, lambda_body;
-				
+		
 		assert(scheme_shape_lambda(exp));
 		
 		lambda_args = *exp.cons.cdr->cons.car;
@@ -961,7 +963,7 @@ eval_continue:
 		// TODO: implicit begin
 		// GC note: implicit begin needs to be rooted
 		
-		return scheme_make_closure(lambda_args, lambda_body, env);
+		return scheme_closure(lambda_args, lambda_body, env);
 	}
 	else if(exp.tag == T_CONS) {
 		// function application
