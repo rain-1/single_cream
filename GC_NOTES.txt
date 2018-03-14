@@ -1,0 +1,35 @@
+struct Obj scheme_cons(struct Obj x, struct Obj y) {
+	struct Obj res = (struct Obj){ .tag = TAG_CONS };
+	res.cons.car = scheme_gc_alloc();
+	*res.cons.car = x;
+	res.cons.cdr = scheme_gc_alloc();
+	*res.cons.cdr = y;
+	return res;
+}
+
+is incorrect because it might collect the car.
+
+
+struct Obj scheme_cons(struct Obj x, struct Obj y) {
+	struct Obj res = (struct Obj){ .tag = TAG_CONS };
+	res.cons.car = scheme_gc_alloc(2);
+	*res.cons.car = x;
+	res.cons.cdr = res.cons.car + 1;
+	*res.cons.cdr = y;
+	return res;
+}
+
+is incorrect because the things x and y point to might be collected/moved, and this would not be reflected
+in x and y even if they were rooted
+
+
+struct Obj scheme_cons(struct Root *x, struct Root *y) {
+	struct Obj res = (struct Obj){ .tag = TAG_CONS };
+	res.cons.car = scheme_gc_alloc(2);
+	*res.cons.car = x->obj;
+	res.cons.cdr = res.cons.car + 1;
+	*res.cons.cdr = y->obj;
+	return res;
+}
+
+seems to be correct
