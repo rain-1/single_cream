@@ -309,6 +309,43 @@ struct Obj scheme_cons(struct Obj *x, struct Obj *y) {
 	return res;
 }
 
+int scheme_eq_internal(struct Obj *x, struct Obj *y) {
+	if(x->tag != y->tag) return 0;
+	
+	switch(x->tag) {
+	case TAG_TRUE:
+	case TAG_FALSE:
+	case TAG_EOF:
+	case TAG_NIL:
+		return 1;
+
+	case TAG_SYMBOL:
+		return x->symbol.id == y->symbol.id;
+	case TAG_NUMBER:
+		return x->number.val == y->number.val;
+	case TAG_CHARACTER:
+		return x->character.val == y->character.val;
+
+	case TAG_CONS:
+		return x->cons.car == y->cons.car && x->cons.cdr == y->cons.cdr;
+	case TAG_STRING:
+		return x->string.len == y->string.len && x->string.text == y->string.text;
+
+	case TAG_CLOSURE:
+		return
+			x->closure.args == y->closure.args &&
+			x->closure.body == y->closure.body &&
+			x->closure.env == y->closure.env;
+
+	default:
+		return 0;
+	}
+}
+
+struct Obj scheme_eq(struct Obj *x, struct Obj *y) {
+	return scheme_eq_internal(x, y) ? const_true : const_false;
+}
+
 void scheme_display(struct Obj *x) {
 	int i;
 
@@ -507,8 +544,8 @@ LBL(read_atom_string)
 LBL(read_buf)
 	if(c == EOF ||
 	   c == ' ' || c == '\n' || c == '\t' ||
-	   c == ')') {
-		if(c == ')')
+	   c == '(' || c == ')') {
+		if(c == '(' || c == ')')
 			UNGETCHAR(c, stdin);
 
 		if(buf[0] == '-' || ('0' <= buf[0] && buf[0] <= '9')) {
@@ -654,6 +691,29 @@ struct Obj scheme_append(struct Obj *xs, struct Obj *ys) {
 	return res;
 }
 
+struct Obj scheme_assoc(struct Obj *key, struct Obj *table) {
+/*
+(define (assoc key table)
+  (if (null? table)
+      #f
+      (if (eq? key (caar table))
+          (car table)
+          (assoc key (cdr table)))))
+*/
+	if(table->tag == TAG_NIL) {
+		return const_false;
+	}
+	
+	assert(table->tag == TAG_CONS);
+	assert(table->cons.car->tag == TAG_CONS);
+	
+	if(scheme_eq(key, table->cons.car->cons.car).tag != TAG_FALSE) {
+		return *table->cons.car;
+	}
+	
+	return scheme_assoc(key, table->cons.cdr);
+}
+
 
 /*
  * SECTION main
@@ -674,7 +734,7 @@ int main(int argc, char **argv) {
 		scheme_read(&rt2->obj, &line_no);
 		scheme_display(&rt2->obj);
 		puts("");
-		res->obj = scheme_append(&rt->obj, &rt2->obj);
+		res->obj = scheme_assoc(&rt->obj, &rt2->obj);
 		scheme_display(&res->obj);
 		puts("");
 		puts("");
