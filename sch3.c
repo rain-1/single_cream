@@ -619,7 +619,7 @@ LBL(read_many_finish)
  * SECTION scheme core
  */
 
-void scheme_append(struct Obj *res, struct Obj *xs, struct Obj *ys) {
+struct Obj scheme_append(struct Obj *xs, struct Obj *ys) {
 /*
 (define (append xs ys)
   (if (null? xs)
@@ -630,10 +630,10 @@ void scheme_append(struct Obj *res, struct Obj *xs, struct Obj *ys) {
         (cons t3 t2)))
 */
 	struct Obj t1, t2, t3;
+	struct Obj res;
 
 	if(xs->tag == TAG_NIL) {
-		*res = *ys;
-		return;
+		return *ys;
 	}
 	
 	assert(xs->tag == TAG_CONS);
@@ -643,15 +643,15 @@ void scheme_append(struct Obj *res, struct Obj *xs, struct Obj *ys) {
 	scheme_root_push(&t3);
 
 	t1 = *xs->cons.cdr;
-	scheme_append(&t2, &t1, ys);
+	t2 = scheme_append(&t1, ys);
 	t3 = *xs->cons.car;
-	*res = scheme_cons(&t3, &t2);
+	res = scheme_cons(&t3, &t2);
 
 	scheme_root_pop();
 	scheme_root_pop();
 	scheme_root_pop();
 
-	return;
+	return res;
 }
 
 
@@ -674,7 +674,7 @@ int main(int argc, char **argv) {
 		scheme_read(&rt2->obj, &line_no);
 		scheme_display(&rt2->obj);
 		puts("");
-		scheme_append(&res->obj, &rt->obj, &rt2->obj);
+		res->obj = scheme_append(&rt->obj, &rt2->obj);
 		scheme_display(&res->obj);
 		puts("");
 		puts("");
