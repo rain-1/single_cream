@@ -67,10 +67,16 @@ void scheme_symbol_init(void);
 struct Obj scheme_symbol_intern(char *name);
 char *scheme_symbol_name(int id);
 
-struct Obj scheme_cons(struct Obj *x, struct Obj *y);
-void scheme_display(struct Obj *x);
-
 void scheme_read(struct Obj *rt, int *line_no);
+
+struct Obj scheme_cons(struct Obj *x, struct Obj *y);
+struct Obj scheme_closure(struct Obj *args, struct Obj *env, struct Obj *body);
+void scheme_display(struct Obj *x);
+struct Obj scheme_eq(struct Obj *x, struct Obj *y);
+struct Obj scheme_append(struct Obj *xs, struct Obj *ys);
+struct Obj scheme_assoc(struct Obj *key, struct Obj *table);
+struct Obj scheme_evlist(struct Obj *exps, struct Obj *env);
+struct Obj scheme_eval(struct Obj *exp, struct Obj *env);
 
 struct Obj const_false, const_true, const_eof, const_nil;
 void scheme_init(void) {
@@ -293,126 +299,6 @@ char *scheme_symbol_name(int id) {
 	}
 
 	return symbol_table[id];
-}
-
-
-/*
- * SECTION Display
- */
-
-struct Obj scheme_cons(struct Obj *x, struct Obj *y) {
-	struct Obj res = (struct Obj){ .tag = TAG_CONS };
-	res.cons.car = scheme_gc_alloc(2);
-	*res.cons.car = x ? *x : const_nil;
-	res.cons.cdr = res.cons.car + 1;
-	*res.cons.cdr = y ? *y : const_nil;
-	return res;
-}
-
-int scheme_eq_internal(struct Obj *x, struct Obj *y) {
-	if(x->tag != y->tag) return 0;
-	
-	switch(x->tag) {
-	case TAG_TRUE:
-	case TAG_FALSE:
-	case TAG_EOF:
-	case TAG_NIL:
-		return 1;
-
-	case TAG_SYMBOL:
-		return x->symbol.id == y->symbol.id;
-	case TAG_NUMBER:
-		return x->number.val == y->number.val;
-	case TAG_CHARACTER:
-		return x->character.val == y->character.val;
-
-	case TAG_CONS:
-		return x->cons.car == y->cons.car && x->cons.cdr == y->cons.cdr;
-	case TAG_STRING:
-		return x->string.len == y->string.len && x->string.text == y->string.text;
-
-	case TAG_CLOSURE:
-		return
-			x->closure.args == y->closure.args &&
-			x->closure.body == y->closure.body &&
-			x->closure.env == y->closure.env;
-
-	default:
-		return 0;
-	}
-}
-
-struct Obj scheme_eq(struct Obj *x, struct Obj *y) {
-	return scheme_eq_internal(x, y) ? const_true : const_false;
-}
-
-void scheme_display(struct Obj *x) {
-	int i;
-
-	switch(x->tag) {
-	case TAG_TRUE:
-		fprintf(stdout, "#t");
-		break;
-	case TAG_FALSE:
-		fprintf(stdout, "#f");
-		break;
-	case TAG_EOF:
-		fprintf(stdout, "#<EOF>");
-		break;
-	case TAG_SYMBOL:
-		fprintf(stdout, "%s", scheme_symbol_name(x->symbol.id));
-		break;
-	case TAG_NUMBER:
-		fprintf(stdout, "%d", x->number.val);
-		break;
-	case TAG_CHARACTER:
-		// TODO: escaping special characters
-		fprintf(stdout, "#\\%c", x->character.val);
-		break;
-	case TAG_STRING:
-		fprintf(stdout, "\"");
-		for(i = 0; i < x->string.len; i++) {
-			if(x->string.text[i] == '\\' || x->string.text[i] == '"') {
-				fprintf(stdout, "\\%c", x->string.text[i]);
-			}
-			else {
-				fprintf(stdout, "%c", x->string.text[i]);
-			}
-		}
-		fprintf(stdout, "\"");
-		break;
-	case TAG_NIL:
-		fprintf(stdout, "()");
-		break;
-	case TAG_CONS:
-		fprintf(stdout, "(");
-loop:
-		scheme_display(x->cons.car);
-		switch(x->cons.cdr->tag) {
-		case TAG_NIL:
-			fprintf(stdout, ")");
-			break;
-		case TAG_CONS:
-			fprintf(stdout, " ");
-			x = x->cons.cdr;
-			goto loop;
-		default:
-			fprintf(stdout, " . ");
-			scheme_display(x->cons.cdr);
-			fprintf(stdout, ")");
-			break;
-		}
-		break;
-	case TAG_CLOSURE:
-		fprintf(stdout, "#<closure>");
-		break;
-	case TAG_GC:
-		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x->gc.fwd) ? "dead" : "live");
-		break;
-	default:
-		fprintf(stderr, "scheme_display: unknown Obj [%d].\n", x->tag);
-		exit(1);
-	}
 }
 
 
@@ -656,6 +542,133 @@ LBL(read_many_finish)
  * SECTION scheme core
  */
 
+
+struct Obj scheme_cons(struct Obj *x, struct Obj *y) {
+	struct Obj res = (struct Obj){ .tag = TAG_CONS };
+	res.cons.car = scheme_gc_alloc(2);
+	*res.cons.car = x ? *x : const_nil;
+	res.cons.cdr = res.cons.car + 1;
+	*res.cons.cdr = y ? *y : const_nil;
+	return res;
+}
+
+struct Obj scheme_closure(struct Obj *args, struct Obj *env, struct Obj *body) {
+	struct Obj res = (struct Obj){ .tag = TAG_CLOSURE };
+	res.closure.args = scheme_gc_alloc(3);
+	*res.closure.args = *args;
+	res.closure.env = res.closure.args + 1;
+	*res.closure.env = *env;
+	res.closure.body = res.closure.args + 2;
+	*res.closure.body = *body;
+	return res;
+}
+
+int scheme_eq_internal(struct Obj *x, struct Obj *y) {
+	if(x->tag != y->tag) return 0;
+	
+	switch(x->tag) {
+	case TAG_TRUE:
+	case TAG_FALSE:
+	case TAG_EOF:
+	case TAG_NIL:
+		return 1;
+
+	case TAG_SYMBOL:
+		return x->symbol.id == y->symbol.id;
+	case TAG_NUMBER:
+		return x->number.val == y->number.val;
+	case TAG_CHARACTER:
+		return x->character.val == y->character.val;
+
+	case TAG_CONS:
+		return x->cons.car == y->cons.car && x->cons.cdr == y->cons.cdr;
+	case TAG_STRING:
+		return x->string.len == y->string.len && x->string.text == y->string.text;
+
+	case TAG_CLOSURE:
+		return
+			x->closure.args == y->closure.args &&
+			x->closure.body == y->closure.body &&
+			x->closure.env == y->closure.env;
+
+	default:
+		return 0;
+	}
+}
+
+struct Obj scheme_eq(struct Obj *x, struct Obj *y) {
+	return scheme_eq_internal(x, y) ? const_true : const_false;
+}
+
+void scheme_display(struct Obj *x) {
+	int i;
+
+	switch(x->tag) {
+	case TAG_TRUE:
+		fprintf(stdout, "#t");
+		break;
+	case TAG_FALSE:
+		fprintf(stdout, "#f");
+		break;
+	case TAG_EOF:
+		fprintf(stdout, "#<EOF>");
+		break;
+	case TAG_SYMBOL:
+		fprintf(stdout, "%s", scheme_symbol_name(x->symbol.id));
+		break;
+	case TAG_NUMBER:
+		fprintf(stdout, "%d", x->number.val);
+		break;
+	case TAG_CHARACTER:
+		// TODO: escaping special characters
+		fprintf(stdout, "#\\%c", x->character.val);
+		break;
+	case TAG_STRING:
+		fprintf(stdout, "\"");
+		for(i = 0; i < x->string.len; i++) {
+			if(x->string.text[i] == '\\' || x->string.text[i] == '"') {
+				fprintf(stdout, "\\%c", x->string.text[i]);
+			}
+			else {
+				fprintf(stdout, "%c", x->string.text[i]);
+			}
+		}
+		fprintf(stdout, "\"");
+		break;
+	case TAG_NIL:
+		fprintf(stdout, "()");
+		break;
+	case TAG_CONS:
+		fprintf(stdout, "(");
+loop:
+		scheme_display(x->cons.car);
+		switch(x->cons.cdr->tag) {
+		case TAG_NIL:
+			fprintf(stdout, ")");
+			break;
+		case TAG_CONS:
+			fprintf(stdout, " ");
+			x = x->cons.cdr;
+			goto loop;
+		default:
+			fprintf(stdout, " . ");
+			scheme_display(x->cons.cdr);
+			fprintf(stdout, ")");
+			break;
+		}
+		break;
+	case TAG_CLOSURE:
+		fprintf(stdout, "#<closure>");
+		break;
+	case TAG_GC:
+		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x->gc.fwd) ? "dead" : "live");
+		break;
+	default:
+		fprintf(stderr, "scheme_display: unknown Obj [%d].\n", x->tag);
+		exit(1);
+	}
+}
+
 struct Obj scheme_append(struct Obj *xs, struct Obj *ys) {
 /*
 (define (append xs ys)
@@ -691,6 +704,59 @@ struct Obj scheme_append(struct Obj *xs, struct Obj *ys) {
 	return res;
 }
 
+struct Obj scheme_zip_append(struct Obj *xs, struct Obj *ys, struct Obj *zs) {
+/*
+(define (zip-append xs ys zs)
+  (if (null? xs)
+      zs
+      (cons (cons (car xs) (car ys))
+            (zip-append (cdr xs) (cdr ys) zs))))
+
+(define (zip-append xs ys zs)
+  (if (null? xs)
+      zs
+      (let ((t1 (car xs))
+            (t2 (car ys))
+            (t3 (cons t1 t2))
+            (t4 (cdr xs))
+            (t5 (cdr ys))
+            (t6 (zip-append t4 t5 zs)))
+        (cons t3 t6))))
+*/
+	struct Obj t1, t2, t3, t4, t5, t6;
+	struct Obj res;
+
+	if(xs->tag == TAG_NIL) {
+		return *ys;
+	}
+	
+	assert(xs->tag == TAG_CONS);
+
+	scheme_root_push(&t1);
+	scheme_root_push(&t2);
+	scheme_root_push(&t3);
+	scheme_root_push(&t4);
+	scheme_root_push(&t5);
+	scheme_root_push(&t6);
+
+	t1 = *xs->cons.car;
+	t2 = *ys->cons.car;
+	t3 = scheme_cons(&t1, &t2);
+	t4 = *xs->cons.cdr;
+	t5 = *ys->cons.cdr;
+	t6 = scheme_zip_append(&t4, &t5, zs);
+	res = scheme_cons(&t3, &t6);
+
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+
+	return res;
+}
+
 struct Obj scheme_assoc(struct Obj *key, struct Obj *table) {
 /*
 (define (assoc key table)
@@ -714,6 +780,185 @@ struct Obj scheme_assoc(struct Obj *key, struct Obj *table) {
 	return scheme_assoc(key, table->cons.cdr);
 }
 
+struct Obj scheme_evlist(struct Obj *exps, struct Obj *env) {
+/*
+(define (evlist exps env)
+  (if (null? exps)
+      '()
+      (let ((t1 (car exps))
+            (t2 (cdr exps))
+            (t1 (eval t1 env))
+            (t2 (evlist t2 env)))
+        (cons t1 t2))))
+*/
+	struct Obj t1, t2;
+	struct Obj res;
+
+	if(exps->tag == TAG_NIL) {
+		return const_nil;
+	}
+	
+	assert(exps->tag == TAG_CONS);
+
+	scheme_root_push(&t1);
+	scheme_root_push(&t2);
+
+	t1 = *exps->cons.car;
+	t2 = *exps->cons.cdr;
+	t1 = scheme_eval(&t1, env);
+	t2 = scheme_evlist(&t2, env);
+	res = scheme_cons(&t1, &t2);
+
+	scheme_root_pop();
+	scheme_root_pop();
+
+	return res;
+}
+
+int scheme_is_self_evaluating(enum Tag tag) {
+	return
+		tag == TAG_FALSE ||
+		tag == TAG_TRUE ||
+		tag == TAG_EOF ||
+		tag == TAG_NUMBER ||
+		tag == TAG_CHARACTER ||
+		tag == TAG_STRING;
+}
+
+struct Obj scheme_eval(struct Obj *exp, struct Obj *env) {
+	// Assumes exp is rooted, and destroys it by overwriting
+	// The crucial thing in this evaluator is to never recursively call 'eval' from a tail position
+	
+	// TODO: properly shadow builtins like begin, if etc.
+	
+	struct Obj f, vals;
+	struct Obj t1, t2, t3;
+	struct Obj res;
+
+eval:
+	if(scheme_is_self_evaluating(exp->tag))
+		return *exp;
+	
+	if(exp->tag == TAG_SYMBOL) {
+		res = scheme_assoc(exp, env);
+		if(res.tag == TAG_FALSE) {
+			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol.id));
+			exit(1);
+		}
+		assert(res.tag == TAG_CONS);
+		return *res.cons.cdr;
+	}
+	
+	if(exp->tag != TAG_CONS) {
+		fprintf(stderr, "error in scheme_eval: unknown object type [%d].\n", exp->tag);
+		exit(1);
+	}
+
+	if(scheme_eq_internal(exp->cons.car, &sym_begin)) {
+		// (begin <exp> ...)
+		
+		scheme_root_push(&t1);
+
+		do {
+			*exp = *exp->cons.cdr;
+			assert(exp->tag == TAG_CONS);
+			
+			t1 = *exp->cons.car;
+			if(exp->cons.cdr->tag == TAG_NIL) {
+				// this is the final one, tail position
+				// so do not recursively call eval
+				scheme_root_pop();
+				*exp = t1;
+				goto eval;
+			}
+			else {
+				scheme_eval(&t1, env);
+			}
+		} while(1);
+	}
+
+	if(scheme_eq_internal(exp->cons.car, &sym_if)) {
+		// (if t1 t2 t3)
+		
+		assert(exp->cons.cdr->tag == TAG_CONS);
+		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
+		assert(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_CONS);
+		assert(exp->cons.cdr->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
+
+		scheme_root_push(&t1);
+		scheme_root_push(&t2);
+		scheme_root_push(&t3);
+		
+		t1 = *exp->cons.cdr->cons.car;
+		t2 = *exp->cons.cdr->cons.cdr->cons.car;
+		t3 = *exp->cons.cdr->cons.cdr->cons.cdr->cons.car;
+		
+		t1 = scheme_eval(&t1, env);
+		
+		if(t1.tag != TAG_FALSE) {
+			*exp = t2;
+		}
+		else {
+			*exp = t3;
+		}
+
+		scheme_root_pop();
+		scheme_root_pop();
+		scheme_root_pop();
+		
+		goto eval;
+	}
+
+	if(scheme_eq_internal(exp->cons.car, &sym_lambda)) {
+		// (lambda <args> <body> ...)
+		// TODO: more than one exp in body
+		
+		assert(exp->cons.cdr->tag == TAG_CONS);
+		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
+		
+		scheme_root_push(&t1);
+		scheme_root_push(&t2);
+		
+		t1 = *exp->cons.cdr->cons.car;
+		t2 = *exp->cons.cdr->cons.cdr->cons.car; //!
+		
+		res = scheme_closure(&t1, env, &t2);
+		
+		scheme_root_pop();
+		scheme_root_pop();
+		
+		return res;
+	}
+
+	// (f arg ...)
+
+	scheme_root_push(&f);
+	scheme_root_push(&vals);
+	scheme_root_push(&t1);
+	scheme_root_push(&t2);
+	
+	f = *exp->cons.car;
+	vals = *exp->cons.cdr;
+	
+	f = scheme_eval(&f, env);
+	vals = scheme_evlist(&vals, env);
+	
+	if(f.tag == TAG_CLOSURE) {
+		*exp = *f.closure.body;
+		*env = scheme_zip_append(f.closure.args, &vals, f.closure.env);
+	}
+	else {
+		fprintf(stderr, "scheme_eval: applying a non function");
+		exit(1);
+	}
+	
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+	
+	goto eval;
+}
 
 /*
  * SECTION main
@@ -731,15 +976,14 @@ int main(int argc, char **argv) {
 		scheme_read(&rt->obj, &line_no);
 		scheme_display(&rt->obj);
 		puts("");
-		scheme_read(&rt2->obj, &line_no);
-		scheme_display(&rt2->obj);
-		puts("");
-		res->obj = scheme_assoc(&rt->obj, &rt2->obj);
+
+		res->obj = scheme_eval(&rt->obj, &rt2->obj);
 		scheme_display(&res->obj);
 		puts("");
-		puts("");
+		
+		res->obj = const_nil;
+		scheme_gc();
 	} while(rt->obj.tag != TAG_EOF);
-	scheme_gc();
 	return 0;
 }
 
