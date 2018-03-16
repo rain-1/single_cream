@@ -53,6 +53,8 @@ int gc_root_stack_height = 0;
 #define MAX_SYMBOLS 4096
 char **symbol_table;
 
+struct Obj *globals;
+
 void scheme_init(void);
 
 void scheme_root_setup(struct Root *);
@@ -80,12 +82,15 @@ struct Obj scheme_eval(struct Obj *exp, struct Obj *env);
 
 struct Obj const_false, const_true, const_eof, const_nil;
 void scheme_init(void) {
+	struct Root *grt;
 	const_false = (struct Obj){ .tag = TAG_FALSE };
 	const_true = (struct Obj){ .tag = TAG_TRUE };
 	const_eof = (struct Obj){ .tag = TAG_EOF };
 	const_nil = (struct Obj){ .tag = TAG_NIL };
 	scheme_gc_init();
 	scheme_symbol_init();
+	grt = scheme_root_alloc();
+	globals = &grt->obj;
 }
 
 
@@ -727,10 +732,18 @@ struct Obj scheme_zip_append(struct Obj *xs, struct Obj *ys, struct Obj *zs) {
 	struct Obj res;
 
 	if(xs->tag == TAG_NIL) {
-		return *ys;
+		if(ys->tag != TAG_NIL) {
+			fprintf(stderr, "error in zip_append: function called with too many arguments.\n");
+			exit(1);
+		}
+		return *zs;
 	}
 	
 	assert(xs->tag == TAG_CONS);
+	if(ys->tag != TAG_CONS) {
+		fprintf(stderr, "error in zip_append: function called with too few arguments.\n");
+		exit(1);
+	}
 
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
@@ -842,6 +855,9 @@ eval:
 	if(exp->tag == TAG_SYMBOL) {
 		res = scheme_assoc(exp, env);
 		if(res.tag == TAG_FALSE) {
+			res = scheme_assoc(exp, globals);
+		}
+		if(res.tag == TAG_FALSE) {
 			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol.id));
 			exit(1);
 		}
@@ -854,6 +870,14 @@ eval:
 		exit(1);
 	}
 
+	if(scheme_eq_internal(exp->cons.car, &sym_quote)) {
+		// (quote <exp>)
+		
+		assert(exp->cons.cdr->cons.cdr->tag == TAG_NIL);
+		
+		return *exp->cons.cdr->cons.car;
+	}
+		
 	if(scheme_eq_internal(exp->cons.car, &sym_begin)) {
 		// (begin <exp> ...)
 		
@@ -960,6 +984,45 @@ eval:
 	goto eval;
 }
 
+int scheme_shape_define(struct Obj *exp) {
+// (define (def? exp)
+//   (and (pair? exp)
+//        (eq? (car exp) 'define)
+//        (pair? (cdr exp))
+//        (pair? (cddr exp)))
+	return
+		exp->tag == TAG_CONS &&
+		scheme_eq_internal(exp->cons.car, &sym_define) &&
+		exp->cons.cdr->tag == TAG_CONS &&
+		exp->cons.cdr->cons.cdr->tag == TAG_CONS;
+}
+
+struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
+	struct Obj t1, t2, t3;
+	
+	if(scheme_shape_define(exp)) {
+		// (define t1 t2)
+		// TODO: implicit begin
+		
+		scheme_root_push(&t1);
+		scheme_root_push(&t2);
+		
+		t1 = *exp->cons.cdr->cons.car;
+		t2 = *exp->cons.cdr->cons.cdr->cons.car;
+		t2 = scheme_eval(&t2, env);
+		t1 = scheme_cons(&t1, &t2);
+		// TODO: overwrite existing
+		*globals = scheme_cons(&t1, globals);
+		
+		scheme_root_pop();
+		scheme_root_pop();
+		
+		return const_nil;
+	}
+	
+	return scheme_eval(exp, env);
+}
+
 /*
  * SECTION main
  */
@@ -974,10 +1037,8 @@ int main(int argc, char **argv) {
 	do {
 		rt->obj = const_nil;
 		scheme_read(&rt->obj, &line_no);
-		scheme_display(&rt->obj);
-		puts("");
 
-		res->obj = scheme_eval(&rt->obj, &rt2->obj);
+		res->obj = scheme_exec(&rt->obj, &rt2->obj);
 		scheme_display(&res->obj);
 		puts("");
 		
