@@ -42,10 +42,13 @@ struct Root {
 	struct Obj obj;
 };
 
-#define SEMISPACE_SIZE 480
+#define SEMISPACE_SIZE 1024
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
+#define ROOTSTACK_SIZE 120
+struct Obj *gc_root_stack[ROOTSTACK_SIZE];
+int gc_root_stack_height = 0;
 
 #define MAX_SYMBOLS 4096
 char **symbol_table;
@@ -64,10 +67,10 @@ void scheme_symbol_init(void);
 struct Obj scheme_symbol_intern(char *name);
 char *scheme_symbol_name(int id);
 
-struct Obj scheme_cons(struct Root *x, struct Root *y);
-void scheme_display(struct Obj x);
+struct Obj scheme_cons(struct Obj *x, struct Obj *y);
+void scheme_display(struct Obj *x);
 
-void scheme_read(struct Root *rt, int *line_no);
+void scheme_read(struct Obj *rt, int *line_no);
 
 struct Obj const_false, const_true, const_eof, const_nil;
 void scheme_init(void) {
@@ -110,6 +113,18 @@ void scheme_root_delete(struct Root *rt) {
 	rt->next = NULL;
 	rt->obj = const_nil;
 	if(rt->free) free(rt);
+}
+
+void scheme_root_push(struct Obj *obj) {
+	assert(gc_root_stack_height < ROOTSTACK_SIZE);
+	gc_root_stack[gc_root_stack_height] = obj;
+	gc_root_stack_height++;
+}
+
+void scheme_root_pop() {
+	gc_root_stack[gc_root_stack_height] = NULL;
+	gc_root_stack_height--;
+	assert(gc_root_stack_height >= 0);
 }
 
 
@@ -285,19 +300,19 @@ char *scheme_symbol_name(int id) {
  * SECTION Display
  */
 
-struct Obj scheme_cons(struct Root *x, struct Root *y) {
+struct Obj scheme_cons(struct Obj *x, struct Obj *y) {
 	struct Obj res = (struct Obj){ .tag = TAG_CONS };
 	res.cons.car = scheme_gc_alloc(2);
-	*res.cons.car = x ? x->obj : const_nil;
+	*res.cons.car = x ? *x : const_nil;
 	res.cons.cdr = res.cons.car + 1;
-	*res.cons.cdr = y ? y->obj : const_nil;
+	*res.cons.cdr = y ? *y : const_nil;
 	return res;
 }
 
-void scheme_display(struct Obj x) {
+void scheme_display(struct Obj *x) {
 	int i;
 
-	switch(x.tag) {
+	switch(x->tag) {
 	case TAG_TRUE:
 		fprintf(stdout, "#t");
 		break;
@@ -308,23 +323,23 @@ void scheme_display(struct Obj x) {
 		fprintf(stdout, "#<EOF>");
 		break;
 	case TAG_SYMBOL:
-		fprintf(stdout, "%s", scheme_symbol_name(x.symbol.id));
+		fprintf(stdout, "%s", scheme_symbol_name(x->symbol.id));
 		break;
 	case TAG_NUMBER:
-		fprintf(stdout, "%d", x.number.val);
+		fprintf(stdout, "%d", x->number.val);
 		break;
 	case TAG_CHARACTER:
 		// TODO: escaping special characters
-		fprintf(stdout, "#\\%c", x.character.val);
+		fprintf(stdout, "#\\%c", x->character.val);
 		break;
 	case TAG_STRING:
 		fprintf(stdout, "\"");
-		for(i = 0; i < x.string.len; i++) {
-			if(x.string.text[i] == '\\' || x.string.text[i] == '"') {
-				fprintf(stdout, "\\%c", x.string.text[i]);
+		for(i = 0; i < x->string.len; i++) {
+			if(x->string.text[i] == '\\' || x->string.text[i] == '"') {
+				fprintf(stdout, "\\%c", x->string.text[i]);
 			}
 			else {
-				fprintf(stdout, "%c", x.string.text[i]);
+				fprintf(stdout, "%c", x->string.text[i]);
 			}
 		}
 		fprintf(stdout, "\"");
@@ -335,18 +350,18 @@ void scheme_display(struct Obj x) {
 	case TAG_CONS:
 		fprintf(stdout, "(");
 loop:
-		scheme_display(*x.cons.car);
-		switch(x.cons.cdr->tag) {
+		scheme_display(x->cons.car);
+		switch(x->cons.cdr->tag) {
 		case TAG_NIL:
 			fprintf(stdout, ")");
 			break;
 		case TAG_CONS:
 			fprintf(stdout, " ");
-			x = *x.cons.cdr;
+			x = x->cons.cdr;
 			goto loop;
 		default:
 			fprintf(stdout, " . ");
-			scheme_display(*x.cons.cdr);
+			scheme_display(x->cons.cdr);
 			fprintf(stdout, ")");
 			break;
 		}
@@ -355,10 +370,10 @@ loop:
 		fprintf(stdout, "#<closure>");
 		break;
 	case TAG_GC:
-		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x.gc.fwd) ? "dead" : "live");
+		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x->gc.fwd) ? "dead" : "live");
 		break;
 	default:
-		fprintf(stderr, "scheme_display: unknown Obj [%d].\n", x.tag);
+		fprintf(stderr, "scheme_display: unknown Obj [%d].\n", x->tag);
 		exit(1);
 	}
 }
@@ -368,7 +383,7 @@ loop:
  * SECTION reader
  */
 
-void scheme_read_many(struct Root *rt, int *line_no);
+void scheme_read_many(struct Obj *rt, int *line_no);
 
 //#define DEBUG
 #ifdef DEBUG
@@ -425,7 +440,7 @@ skip_comment:
 
 }
 
-void scheme_read_atom(struct Root *rt, int *line_no) {
+void scheme_read_atom(struct Obj *rt, int *line_no) {
 	char c;
 	int negative = 0;
 
@@ -447,10 +462,10 @@ LBL(read_atom_hash)
 	GETCHAR(c, stdin);
 	switch(c) {
 	case 't':
-		rt->obj = const_true;
+		*rt = const_true;
 		return;
 	case 'f':
-		rt->obj = const_false;
+		*rt = const_false;
 		return;
 	case '\\':
 		goto read_atom_char;
@@ -467,7 +482,7 @@ LBL(read_atom_char)
 	case 't':
 		// TODO: check for ewline pace ab
 	default:
-		rt->obj = (struct Obj){ .tag = TAG_CHARACTER, .character.val = c };
+		*rt = (struct Obj){ .tag = TAG_CHARACTER, .character.val = c };
 		return;
 	}
 
@@ -479,7 +494,7 @@ LBL(read_atom_string)
 	}
 	if(c == '"') {
 		// TODO: make a string
-		rt->obj = scheme_symbol_intern(buf);
+		*rt = scheme_symbol_intern(buf);
 		return;
 	}
 	if(c == '\\') {
@@ -497,11 +512,11 @@ LBL(read_buf)
 			UNGETCHAR(c, stdin);
 
 		if(buf[0] == '-' || ('0' <= buf[0] && buf[0] <= '9')) {
-			rt->obj = (struct Obj){ .tag = TAG_NUMBER, .number.val = atoi(buf) };
+			*rt = (struct Obj){ .tag = TAG_NUMBER, .number.val = atoi(buf) };
 			return;
 		}
 		else {
-			rt->obj = scheme_symbol_intern(buf);
+			*rt = scheme_symbol_intern(buf);
 			return;
 		}
 	}
@@ -511,14 +526,14 @@ LBL(read_buf)
 	goto read_buf;
 }
 
-void scheme_read(struct Root *rt, int *line_no) {
+void scheme_read(struct Obj *rt, int *line_no) {
 	char c;
 	
 	scheme_read_skip_ws(line_no, 0);
 	GETCHAR(c, stdin);
 	switch(c) {
 	case EOF:
-		rt->obj = const_eof;
+		*rt = const_eof;
 		return;
 	case '(':
 		scheme_read_many(rt, line_no);
@@ -538,18 +553,17 @@ void scheme_read(struct Root *rt, int *line_no) {
 
 LBL(read_shorthand)
 	scheme_read(rt, line_no);
-	rt->obj = scheme_cons(rt, NULL);
-	rt->obj = scheme_cons(NULL, rt);
+	*rt = scheme_cons(rt, NULL);
+	*rt = scheme_cons(NULL, rt);
 	switch(c) {
 	case '\'':
-		*rt->obj.cons.car = sym_quote;
+		*rt->cons.car = sym_quote;
 		break;
 	case '`':
-		*rt->obj
-.cons.car = sym_quasiquote;
+		*rt->cons.car = sym_quasiquote;
 		break;
 	case ',':
-		*rt->obj.cons.car = sym_unquote;
+		*rt->cons.car = sym_unquote;
 		break;
 	default:
 		fprintf(stderr, "scheme_read: error with shorthand on line %d.\n", *line_no);
@@ -557,16 +571,16 @@ LBL(read_shorthand)
 	}
 }
 
-void scheme_read_many(struct Root *rt, int *line_no) {
+void scheme_read_many(struct Obj *rt, int *line_no) {
 	char c;
 	
-	struct Root rt_1, rt_2;
+	struct Obj rt_1, rt_2;
 	
 	scheme_read_skip_ws(line_no, 1);
 	GETCHAR(c, stdin);
 	switch(c) {
 	case ')':
-		rt->obj = const_nil;
+		*rt = const_nil;
 		return;
 	case '.':
 		scheme_read(rt, line_no);
@@ -574,16 +588,16 @@ void scheme_read_many(struct Root *rt, int *line_no) {
 	default:
 		UNGETCHAR(c, stdin);
 		
-		scheme_root_setup(&rt_1);
-		scheme_root_setup(&rt_2);
+		scheme_root_push(&rt_1);
+		scheme_root_push(&rt_2);
 		
 		scheme_read(&rt_1, line_no);
 		scheme_read_many(&rt_2, line_no);
 
-		rt->obj = scheme_cons(&rt_1, &rt_2);
+		*rt = scheme_cons(&rt_1, &rt_2);
 		
-		scheme_root_delete(&rt_1);
-		scheme_root_delete(&rt_2);
+		scheme_root_pop();
+		scheme_root_pop();
 		
 		return;
 	}
@@ -602,18 +616,67 @@ LBL(read_many_finish)
 
 
 /*
+ * SECTION scheme core
+ */
+
+void scheme_append(struct Obj *res, struct Obj *xs, struct Obj *ys) {
+/*
+(define (append xs ys)
+  (if (null? xs)
+      ys
+      (let* ((t1 (cdr xs))
+             (t2 (append t1 ys))
+             (t3 (car xs)))
+        (cons t3 t2)))
+*/
+	struct Obj t1, t2, t3;
+
+	if(xs->tag == TAG_NIL) {
+		*res = *ys;
+		return;
+	}
+	
+	assert(xs->tag == TAG_CONS);
+
+	scheme_root_push(&t1);
+	scheme_root_push(&t2);
+	scheme_root_push(&t3);
+
+	t1 = *xs->cons.cdr;
+	scheme_append(&t2, &t1, ys);
+	t3 = *xs->cons.car;
+	*res = scheme_cons(&t3, &t2);
+
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+
+	return;
+}
+
+
+/*
  * SECTION main
  */
 
 int main(int argc, char **argv) {
-	struct Root *rt;
+	struct Root *rt, *rt2, *res;
 	int line_no = 0;
 	scheme_init();
 	rt = scheme_root_alloc();
+	rt2 = scheme_root_alloc();
+	res = scheme_root_alloc();
 	do {
 		rt->obj = const_nil;
-		scheme_read(rt, &line_no);
-		scheme_display(rt->obj);
+		scheme_read(&rt->obj, &line_no);
+		scheme_display(&rt->obj);
+		puts("");
+		scheme_read(&rt2->obj, &line_no);
+		scheme_display(&rt2->obj);
+		puts("");
+		scheme_append(&res->obj, &rt->obj, &rt2->obj);
+		scheme_display(&res->obj);
+		puts("");
 		puts("");
 	} while(rt->obj.tag != TAG_EOF);
 	scheme_gc();
