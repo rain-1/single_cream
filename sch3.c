@@ -909,23 +909,22 @@ eval:
 		// (begin <exp> ...)
 		
 		scheme_root_push(&t1);
-
-		do {
-			*exp = *exp->cons.cdr;
-			assert(exp->tag == TAG_CONS);
-			
-			t1 = *exp->cons.car;
-			if(exp->cons.cdr->tag == TAG_NIL) {
-				// this is the final one, tail position
-				// so do not recursively call eval
-				scheme_root_pop();
-				*exp = t1;
-				goto eval;
-			}
-			else {
-				return scheme_eval(&t1, env);
-			}
-		} while(1);
+loop_begin:
+		*exp = *exp->cons.cdr;
+		assert(exp->tag == TAG_CONS);
+		
+		t1 = *exp->cons.car;
+		if(exp->cons.cdr->tag == TAG_NIL) {
+			// this is the final one, tail position
+			// so do not recursively call eval
+			*exp = t1;
+			scheme_root_pop();
+			goto eval;
+		}
+		else {
+			scheme_eval(&t1, env);
+			goto loop_begin;
+		}
 	}
 
 	if(scheme_eq_internal(exp->cons.car, &sym_if)) {
