@@ -57,7 +57,7 @@ char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
 
-struct Obj *globals;
+struct Root *globals;
 
 void scheme_init(void);
 
@@ -88,14 +88,12 @@ void scheme_builtins_init(void);
 
 struct Obj const_false, const_true, const_eof, const_nil;
 void scheme_init(void) {
-	struct Root *grt;
 	const_false = (struct Obj){ .tag = TAG_FALSE };
 	const_true = (struct Obj){ .tag = TAG_TRUE };
 	const_eof = (struct Obj){ .tag = TAG_EOF };
 	const_nil = (struct Obj){ .tag = TAG_NIL };
 	scheme_gc_init();
-	grt = scheme_root_alloc();
-	globals = &grt->obj;
+	globals = scheme_root_alloc();
 	scheme_symbol_init();
 	scheme_builtins_init();
 }
@@ -236,8 +234,10 @@ struct Obj *scheme_gc_copy(struct Obj *obj) {
 		return res;
 	}
 	else {
-		fprintf(stderr, "gc: error in gc_copy\n");
-		exit(1);
+		//fprintf(stderr, "gc: error in gc_copy\n");
+		//scheme_display(obj);
+		//exit(1);
+		return obj;
 	}
 }
 
@@ -336,7 +336,7 @@ void scheme_read_many(struct Obj *rt, int *line_no);
 #define UNGETCHAR(c, port) do { ungetc(c, port); if(c == '\n') --*line_no; } while(0)
 
 void scheme_read_skip_ws(int *line_no, int eof_err) {
-	char c;
+	int c;
 
 skip_loop:
 	GETCHAR(c, stdin);
@@ -376,7 +376,7 @@ skip_comment:
 }
 
 void scheme_read_atom(struct Obj *rt, int *line_no) {
-	char c;
+	int c;
 	int negative = 0;
 
 	char buf[64];
@@ -462,7 +462,7 @@ LBL(read_buf)
 }
 
 void scheme_read(struct Obj *rt, int *line_no) {
-	char c;
+	int c;
 	
 	scheme_read_skip_ws(line_no, 0);
 	GETCHAR(c, stdin);
@@ -504,10 +504,11 @@ LBL(read_shorthand)
 		fprintf(stderr, "scheme_read: error with shorthand on line %d.\n", *line_no);
 		exit(1);
 	}
+	return;
 }
 
 void scheme_read_many(struct Obj *rt, int *line_no) {
-	char c;
+	int c;
 	
 	struct Obj rt_1, rt_2;
 	
@@ -881,7 +882,7 @@ eval:
 	if(exp->tag == TAG_SYMBOL) {
 		res = scheme_assoc(exp, env);
 		if(res.tag == TAG_FALSE) {
-			res = scheme_assoc(exp, globals);
+			res = scheme_assoc(exp, &globals->obj);
 		}
 		if(res.tag == TAG_FALSE) {
 			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol.id));
@@ -1058,7 +1059,7 @@ struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 		t2 = scheme_eval(&t2, env);
 		t1 = scheme_cons(&t1, &t2);
 		// TODO: overwrite existing
-		*globals = scheme_cons(&t1, globals);
+		globals->obj = scheme_cons(&t1, &globals->obj);
 		
 		scheme_root_pop();
 		scheme_root_pop();
@@ -1073,6 +1074,15 @@ struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 /*
  * SECTION builtins
  */
+
+struct Obj scheme_builtin_display(struct Obj *args) {
+	scheme_display(&args[0]);
+	return const_nil;
+}
+
+struct Obj scheme_builtin_eq(struct Obj *args) {
+	return scheme_eq(&args[0], &args[1]);
+}
 
 struct Obj scheme_builtin_car(struct Obj *args) {
 	assert(args[0].tag == TAG_CONS);
@@ -1092,14 +1102,18 @@ void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
 	scheme_root_push(&tmp);
 	scheme_root_push(&nm);
-#define BUILTIN(IMPL, NARGS) \
+#define BUILTIN(IMPL, NARGS) BUILTIN_(IMPL, # IMPL, NARGS)
+#define BUILTIN_(IMPL, NAME, NARGS) \
 	do { \
 		assert(NARGS <= MAX_BUILTIN_ARGS); \
 		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL }; \
-		nm = scheme_symbol_intern(# IMPL); \
+		nm = scheme_symbol_intern(NAME); \
 		tmp = scheme_cons(&nm, &tmp); \
-		*globals = scheme_cons(&tmp, globals); \
+		globals->obj = scheme_cons(&tmp, &globals->obj); \
 	} while(0)
+
+	BUILTIN(display, 1);
+	BUILTIN_(eq, "eq?", 2);
 
 	BUILTIN(car, 1);
 	BUILTIN(cdr, 1);
@@ -1133,4 +1147,5 @@ int main(int argc, char **argv) {
 	} while(rt->obj.tag != TAG_EOF);
 	return 0;
 }
+
 
