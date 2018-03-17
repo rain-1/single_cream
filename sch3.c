@@ -66,6 +66,10 @@ char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
 
+// GC_OFF = 1 -> off
+// GC_OFF = 0 -> on
+#define GC_OFF 0
+
 struct Root *globals;
 
 void scheme_init(void);
@@ -187,7 +191,7 @@ struct Obj *scheme_gc_alloc_internal(int cells, int gc_loop_check) {
 }
 
 struct Obj *scheme_gc_alloc(int cells) {
-	return scheme_gc_alloc_internal(cells, 0);
+	return scheme_gc_alloc_internal(cells, GC_OFF);
 }
 
 #define SWAP(x,y) do { struct Obj *tmp = x; x = y; y = tmp; } while(0)
@@ -761,11 +765,11 @@ struct Obj scheme_zip_append(struct Obj *xs, struct Obj *ys, struct Obj *zs) {
 		return *zs;
 	}
 	
-	assert(xs->tag == TAG_CONS);
 	if(ys->tag != TAG_CONS) {
 		fprintf(stderr, "error in zip_append: function called with too few arguments.\n");
 		exit(1);
 	}
+	assert(xs->tag == TAG_CONS);
 
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
@@ -918,23 +922,22 @@ eval:
 		// (begin <exp> ...)
 		
 		scheme_root_push(&t1);
-
-		do {
-			*exp = *exp->cons_cdr;
-			assert(exp->tag == TAG_CONS);
-			
-			t1 = *exp->cons_car;
-			if(exp->cons_cdr->tag == TAG_NIL) {
-				// this is the final one, tail position
-				// so do not recursively call eval
-				scheme_root_pop();
-				*exp = t1;
-				goto eval;
-			}
-			else {
-				scheme_eval(&t1, env);
-			}
-		} while(1);
+loop_begin:
+		*exp = *exp->cons_cdr;
+		assert(exp->tag == TAG_CONS);
+		
+		t1 = *exp->cons_car;
+		if(exp->cons_cdr->tag == TAG_NIL) {
+			// this is the final one, tail position
+			// so do not recursively call eval
+			*exp = t1;
+			scheme_root_pop();
+			goto eval;
+		}
+		else {
+			scheme_eval(&t1, env);
+			goto loop_begin;
+		}
 	}
 
 	if(scheme_eq_internal(exp->cons_car, &sym_if)) {
@@ -981,7 +984,7 @@ eval:
 		t1 = *exp->cons_cdr->cons_car;
 		t2 = *exp->cons_cdr->cons_cdr;
 		t2 = scheme_make_begin(&t2);
-		
+
 		res = scheme_closure(&t1, env, &t2);
 		
 		scheme_root_pop();
