@@ -18,6 +18,7 @@ enum Tag {
 	TAG_NIL		= 7,
 	TAG_CONS	= 8,
 	TAG_CLOSURE	= 9,
+	TAG_BUILTIN	= 10,
 	
 	TAG_GC		= 0xFF,
 };
@@ -31,6 +32,7 @@ struct Obj {
 		struct { int len; char *text; } string;
 		struct { struct Obj *car, *cdr; } cons;
 		struct { struct Obj *args, *env, *body; } closure;
+		struct { int n_args; struct Obj (*impl)(struct Obj *args); } builtin;
 		struct { struct Obj *fwd; } gc;
 	};
 };
@@ -42,7 +44,7 @@ struct Root {
 	struct Obj obj;
 };
 
-#define SEMISPACE_SIZE 1024
+#define SEMISPACE_SIZE 120
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
@@ -52,6 +54,8 @@ int gc_root_stack_height = 0;
 
 #define MAX_SYMBOLS 4096
 char **symbol_table;
+
+#define MAX_BUILTIN_ARGS 5
 
 struct Obj *globals;
 
@@ -80,6 +84,8 @@ struct Obj scheme_assoc(struct Obj *key, struct Obj *table);
 struct Obj scheme_evlist(struct Obj *exps, struct Obj *env);
 struct Obj scheme_eval(struct Obj *exp, struct Obj *env);
 
+void scheme_builtins_init(void);
+
 struct Obj const_false, const_true, const_eof, const_nil;
 void scheme_init(void) {
 	struct Root *grt;
@@ -88,9 +94,10 @@ void scheme_init(void) {
 	const_eof = (struct Obj){ .tag = TAG_EOF };
 	const_nil = (struct Obj){ .tag = TAG_NIL };
 	scheme_gc_init();
-	scheme_symbol_init();
 	grt = scheme_root_alloc();
 	globals = &grt->obj;
+	scheme_symbol_init();
+	scheme_builtins_init();
 }
 
 
@@ -547,7 +554,6 @@ LBL(read_many_finish)
  * SECTION scheme core
  */
 
-
 struct Obj scheme_cons(struct Obj *x, struct Obj *y) {
 	struct Obj res = (struct Obj){ .tag = TAG_CONS };
 	res.cons.car = scheme_gc_alloc(2);
@@ -595,6 +601,9 @@ int scheme_eq_internal(struct Obj *x, struct Obj *y) {
 			x->closure.args == y->closure.args &&
 			x->closure.body == y->closure.body &&
 			x->closure.env == y->closure.env;
+	
+	case TAG_BUILTIN:
+		return x->builtin.n_args == y->builtin.n_args && x->builtin.impl == y->builtin.impl;
 
 	default:
 		return 0;
@@ -664,6 +673,9 @@ loop:
 		break;
 	case TAG_CLOSURE:
 		fprintf(stdout, "#<closure>");
+		break;
+	case TAG_BUILTIN:
+		fprintf(stdout, "#<builtin>");
 		break;
 	case TAG_GC:
 		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x->gc.fwd) ? "dead" : "live");
@@ -859,6 +871,8 @@ struct Obj scheme_eval(struct Obj *exp, struct Obj *env) {
 	struct Obj f, vals;
 	struct Obj t1, t2, t3;
 	struct Obj res;
+	struct Obj args[MAX_BUILTIN_ARGS];
+	int i;
 
 eval:
 	if(scheme_is_self_evaluating(exp->tag))
@@ -983,8 +997,28 @@ eval:
 		*exp = *f.closure.body;
 		*env = scheme_zip_append(f.closure.args, &vals, f.closure.env);
 	}
+	else if(f.tag == TAG_BUILTIN) {
+		for(i = 0; i < f.builtin.n_args; i++) {
+			scheme_root_push(&args[i]);
+			if(vals.tag != TAG_CONS) {
+				fprintf(stderr, "scheme_eval: too few args when calling builtin.\n");
+				exit(1);
+			}
+			args[i] = *vals.cons.car;
+			vals = *vals.cons.cdr;
+		}
+		if(vals.tag != TAG_NIL) {
+			fprintf(stderr, "scheme_eval: too many args when calling builtin.\n");
+			exit(1);
+		}
+		res = f.builtin.impl(args);
+		for(i = 0; i < f.builtin.n_args; i++) {
+			scheme_root_pop();
+		}
+		return res;
+	}
 	else {
-		fprintf(stderr, "scheme_eval: applying a non function");
+		fprintf(stderr, "scheme_eval: applying a non function.\n");
 		exit(1);
 	}
 	
@@ -1033,6 +1067,46 @@ struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 	}
 	
 	return scheme_eval(exp, env);
+}
+
+
+/*
+ * SECTION builtins
+ */
+
+struct Obj scheme_builtin_car(struct Obj *args) {
+	assert(args[0].tag == TAG_CONS);
+	return *args[0].cons.car;
+}
+
+struct Obj scheme_builtin_cdr(struct Obj *args) {
+	assert(args[0].tag == TAG_CONS);
+	return *args[0].cons.cdr;
+}
+
+struct Obj scheme_builtin_cons(struct Obj *args) {
+	return scheme_cons(&args[0], &args[1]);
+}
+
+void scheme_builtins_init(void) {
+	struct Obj tmp, nm;
+	scheme_root_push(&tmp);
+	scheme_root_push(&nm);
+#define BUILTIN(IMPL, NARGS) \
+	do { \
+		assert(NARGS <= MAX_BUILTIN_ARGS); \
+		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL }; \
+		nm = scheme_symbol_intern(# IMPL); \
+		tmp = scheme_cons(&nm, &tmp); \
+		*globals = scheme_cons(&tmp, globals); \
+	} while(0)
+
+	BUILTIN(car, 1);
+	BUILTIN(cdr, 1);
+	BUILTIN(cons, 2);
+
+	scheme_root_pop();
+	scheme_root_pop();
 }
 
 /*
