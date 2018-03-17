@@ -752,11 +752,11 @@ struct Obj scheme_zip_append(struct Obj *xs, struct Obj *ys, struct Obj *zs) {
 		return *zs;
 	}
 	
-	assert(xs->tag == TAG_CONS);
 	if(ys->tag != TAG_CONS) {
 		fprintf(stderr, "error in zip_append: function called with too few arguments.\n");
 		exit(1);
 	}
+	assert(xs->tag == TAG_CONS);
 
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
@@ -971,7 +971,7 @@ loop_begin:
 		t1 = *exp->cons.cdr->cons.car;
 		t2 = *exp->cons.cdr->cons.cdr;
 		t2 = scheme_make_begin(&t2);
-		
+
 		res = scheme_closure(&t1, env, &t2);
 		
 		scheme_root_pop();
