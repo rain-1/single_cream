@@ -206,6 +206,9 @@ void scheme_gc(void) {
 	for(rt = gc_roots; rt; rt = rt->next)
 		scheme_gc_forward(&rt->obj);
 
+	for(i = 0; i < gc_root_stack_height; i++)
+		scheme_gc_forward(gc_root_stack[i]);
+
 	for(; gc_scan_ptr < gc_free_ptr; gc_scan_ptr++)
 		scheme_gc_forward(gc_scan_ptr);
 }
