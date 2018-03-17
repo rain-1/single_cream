@@ -57,6 +57,10 @@ char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
 
+// GC_OFF = 1 -> off
+// GC_OFF = 0 -> on
+#define GC_OFF 0
+
 struct Root *globals;
 
 void scheme_init(void);
@@ -178,7 +182,7 @@ struct Obj *scheme_gc_alloc_internal(int cells, int gc_loop_check) {
 }
 
 struct Obj *scheme_gc_alloc(int cells) {
-	return scheme_gc_alloc_internal(cells, 0);
+	return scheme_gc_alloc_internal(cells, GC_OFF);
 }
 
 #define SWAP(x,y) do { struct Obj *tmp = x; x = y; y = tmp; } while(0)
