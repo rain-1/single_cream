@@ -923,7 +923,7 @@ eval:
 				goto eval;
 			}
 			else {
-				scheme_eval(&t1, env);
+				return scheme_eval(&t1, env);
 			}
 		} while(1);
 	}
