@@ -353,6 +353,7 @@ skip_loop:
 			fprintf(stderr, "scheme_skip_ws: early EOF on line %d.\n", *line_no);
 			exit(1);
 		}
+		fclose(stdin);
 		return;
 	case ' ':
 	case '\n':
