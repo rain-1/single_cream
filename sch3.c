@@ -1012,7 +1012,7 @@ eval:
 			exit(1);
 		}
 		res = f.builtin.impl(args);
-		for(i = 0; i < f.builtin.n_args; i++) {
+		for(i = 0; i < f.builtin.n_args + 4; i++) { // + 4 for f, vals, t1, t2
 			scheme_root_pop();
 		}
 		return res;
