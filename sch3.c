@@ -838,6 +838,18 @@ int scheme_is_self_evaluating(enum Tag tag) {
 		tag == TAG_STRING;
 }
 
+struct Obj scheme_make_begin(struct Obj *lst) {
+/*
+(define (make-begin lst)
+  (if (null? (cdr lst))
+      (car lst)
+      (cons 'begin lst)))
+*/
+	if(lst->cons.cdr->tag == TAG_NIL)
+		return *lst->cons.car;
+	return scheme_cons(&sym_begin, lst);
+}
+
 struct Obj scheme_eval(struct Obj *exp, struct Obj *env) {
 	// Assumes exp is rooted, and destroys it by overwriting
 	// The crucial thing in this evaluator is to never recursively call 'eval' from a tail position
@@ -935,7 +947,6 @@ eval:
 
 	if(scheme_eq_internal(exp->cons.car, &sym_lambda)) {
 		// (lambda <args> <body> ...)
-		// TODO: more than one exp in body
 		
 		assert(exp->cons.cdr->tag == TAG_CONS);
 		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
@@ -944,7 +955,8 @@ eval:
 		scheme_root_push(&t2);
 		
 		t1 = *exp->cons.cdr->cons.car;
-		t2 = *exp->cons.cdr->cons.cdr->cons.car; //!
+		t2 = *exp->cons.cdr->cons.cdr;
+		t2 = scheme_make_begin(&t2);
 		
 		res = scheme_closure(&t1, env, &t2);
 		
@@ -1001,14 +1013,14 @@ struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 	struct Obj t1, t2, t3;
 	
 	if(scheme_shape_define(exp)) {
-		// (define t1 t2)
-		// TODO: implicit begin
+		// (define t1 t2 ...)
 		
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
 		
 		t1 = *exp->cons.cdr->cons.car;
-		t2 = *exp->cons.cdr->cons.cdr->cons.car;
+		t2 = *exp->cons.cdr->cons.cdr;
+		t2 = scheme_make_begin(&t2);
 		t2 = scheme_eval(&t2, env);
 		t1 = scheme_cons(&t1, &t2);
 		// TODO: overwrite existing
