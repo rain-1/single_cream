@@ -23,18 +23,27 @@ enum Tag {
 	TAG_GC		= 0xFF,
 };
 
+typedef struct Obj (*Operation)(struct Obj *);
+
 struct Obj {
 	enum Tag tag;
-	union {
-		struct { int id; } symbol;
-		struct { int val; } number;
-		struct { char val; } character;
-		struct { int len; char *text; } string;
-		struct { struct Obj *car, *cdr; } cons;
-		struct { struct Obj *args, *env, *body; } closure;
-		struct { int n_args; struct Obj (*impl)(struct Obj *args); } builtin;
-		struct { struct Obj *fwd; } gc;
+	union{
+		int symbol_id;
+		int number_val;
+		char character_val;
+		int string_len;
+		struct Obj* cons_car;
+		struct Obj* closure_args;
+		int builtin_n_args;
+		struct Obj* gc_fwd;
 	};
+	union {
+		char* string_text;
+		struct Obj* cons_cdr;
+		struct Obj* closure_body;
+		Operation builtin_impl;
+	};
+	struct Obj* closure_env;
 };
 
 struct Root {
@@ -200,13 +209,13 @@ void scheme_gc(void) {
 void scheme_gc_forward(struct Obj *obj) {
 	switch(obj->tag) {
 	case TAG_CONS:
-		obj->cons.car = scheme_gc_copy(obj->cons.car);
-		obj->cons.cdr = scheme_gc_copy(obj->cons.cdr);
+		obj->cons_car = scheme_gc_copy(obj->cons_car);
+		obj->cons_cdr = scheme_gc_copy(obj->cons_cdr);
 		break;
 	case TAG_CLOSURE:
-		obj->closure.args = scheme_gc_copy(obj->closure.args);
-		obj->closure.env = scheme_gc_copy(obj->closure.env);
-		obj->closure.body = scheme_gc_copy(obj->closure.body);
+		obj->closure_args = scheme_gc_copy(obj->closure_args);
+		obj->closure_env = scheme_gc_copy(obj->closure_env);
+		obj->closure_body = scheme_gc_copy(obj->closure_body);
 		break;
 	case TAG_GC:
 		fprintf(stderr, "gc: error gc_forward\n");
@@ -225,12 +234,12 @@ struct Obj *scheme_gc_copy(struct Obj *obj) {
 	struct Obj *res;
 	
 	if(obj->tag == TAG_GC) {
-		return obj->gc.fwd;
+		return obj->gc_fwd;
 	}
 	if(scheme_gc_dead(obj)) {
 		res = scheme_gc_alloc(1);
 		*res = *obj;
-		*obj = (struct Obj){ .tag = TAG_GC, .gc.fwd = res };
+		*obj = (struct Obj){ .tag = TAG_GC, .gc_fwd = res };
 		return res;
 	}
 	else {
@@ -289,7 +298,7 @@ struct Obj scheme_symbol_intern(char *name) {
 	
 	for(i = 0; i < symbol_table_size; i++) {
 		if(!strcmp(symbol_table[i], name)) {
-			return (struct Obj){ .tag = TAG_SYMBOL, .symbol.id = i };
+			return (struct Obj){ .tag = TAG_SYMBOL, .symbol_id = i };
 		}
 	}
 	
@@ -301,7 +310,7 @@ struct Obj scheme_symbol_intern(char *name) {
 	strncpy(symbol_table[i], name, 64);
 	symbol_table_size++;
 	
-	return (struct Obj){ .tag = TAG_SYMBOL, .symbol.id = i };
+	return (struct Obj){ .tag = TAG_SYMBOL, .symbol_id = i };
 }
 
 char *scheme_symbol_name(int id) {
@@ -417,7 +426,7 @@ LBL(read_atom_char)
 	case 't':
 		// TODO: check for ewline pace ab
 	default:
-		*rt = (struct Obj){ .tag = TAG_CHARACTER, .character.val = c };
+		*rt = (struct Obj){ .tag = TAG_CHARACTER, .character_val = c };
 		return;
 	}
 
@@ -447,7 +456,7 @@ LBL(read_buf)
 			UNGETCHAR(c, stdin);
 
 		if(buf[0] == '-' || ('0' <= buf[0] && buf[0] <= '9')) {
-			*rt = (struct Obj){ .tag = TAG_NUMBER, .number.val = atoi(buf) };
+			*rt = (struct Obj){ .tag = TAG_NUMBER, .number_val = atoi(buf) };
 			return;
 		}
 		else {
@@ -492,13 +501,13 @@ LBL(read_shorthand)
 	*rt = scheme_cons(NULL, rt);
 	switch(c) {
 	case '\'':
-		*rt->cons.car = sym_quote;
+		*rt->cons_car = sym_quote;
 		break;
 	case '`':
-		*rt->cons.car = sym_quasiquote;
+		*rt->cons_car = sym_quasiquote;
 		break;
 	case ',':
-		*rt->cons.car = sym_unquote;
+		*rt->cons_car = sym_unquote;
 		break;
 	default:
 		fprintf(stderr, "scheme_read: error with shorthand on line %d.\n", *line_no);
@@ -557,21 +566,21 @@ LBL(read_many_finish)
 
 struct Obj scheme_cons(struct Obj *x, struct Obj *y) {
 	struct Obj res = (struct Obj){ .tag = TAG_CONS };
-	res.cons.car = scheme_gc_alloc(2);
-	*res.cons.car = x ? *x : const_nil;
-	res.cons.cdr = res.cons.car + 1;
-	*res.cons.cdr = y ? *y : const_nil;
+	res.cons_car = scheme_gc_alloc(2);
+	*res.cons_car = x ? *x : const_nil;
+	res.cons_cdr = res.cons_car + 1;
+	*res.cons_cdr = y ? *y : const_nil;
 	return res;
 }
 
 struct Obj scheme_closure(struct Obj *args, struct Obj *env, struct Obj *body) {
 	struct Obj res = (struct Obj){ .tag = TAG_CLOSURE };
-	res.closure.args = scheme_gc_alloc(3);
-	*res.closure.args = *args;
-	res.closure.env = res.closure.args + 1;
-	*res.closure.env = *env;
-	res.closure.body = res.closure.args + 2;
-	*res.closure.body = *body;
+	res.closure_args = scheme_gc_alloc(3);
+	*res.closure_args = *args;
+	res.closure_env = res.closure_args + 1;
+	*res.closure_env = *env;
+	res.closure_body = res.closure_args + 2;
+	*res.closure_body = *body;
 	return res;
 }
 
@@ -586,25 +595,25 @@ int scheme_eq_internal(struct Obj *x, struct Obj *y) {
 		return 1;
 
 	case TAG_SYMBOL:
-		return x->symbol.id == y->symbol.id;
+		return x->symbol_id == y->symbol_id;
 	case TAG_NUMBER:
-		return x->number.val == y->number.val;
+		return x->number_val == y->number_val;
 	case TAG_CHARACTER:
-		return x->character.val == y->character.val;
+		return x->character_val == y->character_val;
 
 	case TAG_CONS:
-		return x->cons.car == y->cons.car && x->cons.cdr == y->cons.cdr;
+		return x->cons_car == y->cons_car && x->cons_cdr == y->cons_cdr;
 	case TAG_STRING:
-		return x->string.len == y->string.len && x->string.text == y->string.text;
+		return x->string_len == y->string_len && x->string_text == y->string_text;
 
 	case TAG_CLOSURE:
 		return
-			x->closure.args == y->closure.args &&
-			x->closure.body == y->closure.body &&
-			x->closure.env == y->closure.env;
+			x->closure_args == y->closure_args &&
+			x->closure_body == y->closure_body &&
+			x->closure_env == y->closure_env;
 	
 	case TAG_BUILTIN:
-		return x->builtin.n_args == y->builtin.n_args && x->builtin.impl == y->builtin.impl;
+		return x->builtin_n_args == y->builtin_n_args && x->builtin_impl == y->builtin_impl;
 
 	default:
 		return 0;
@@ -629,23 +638,23 @@ void scheme_display(struct Obj *x) {
 		fprintf(stdout, "#<EOF>");
 		break;
 	case TAG_SYMBOL:
-		fprintf(stdout, "%s", scheme_symbol_name(x->symbol.id));
+		fprintf(stdout, "%s", scheme_symbol_name(x->symbol_id));
 		break;
 	case TAG_NUMBER:
-		fprintf(stdout, "%d", x->number.val);
+		fprintf(stdout, "%d", x->number_val);
 		break;
 	case TAG_CHARACTER:
 		// TODO: escaping special characters
-		fprintf(stdout, "#\\%c", x->character.val);
+		fprintf(stdout, "#\\%c", x->character_val);
 		break;
 	case TAG_STRING:
 		fprintf(stdout, "\"");
-		for(i = 0; i < x->string.len; i++) {
-			if(x->string.text[i] == '\\' || x->string.text[i] == '"') {
-				fprintf(stdout, "\\%c", x->string.text[i]);
+		for(i = 0; i < x->string_len; i++) {
+			if(x->string_text[i] == '\\' || x->string_text[i] == '"') {
+				fprintf(stdout, "\\%c", x->string_text[i]);
 			}
 			else {
-				fprintf(stdout, "%c", x->string.text[i]);
+				fprintf(stdout, "%c", x->string_text[i]);
 			}
 		}
 		fprintf(stdout, "\"");
@@ -656,18 +665,18 @@ void scheme_display(struct Obj *x) {
 	case TAG_CONS:
 		fprintf(stdout, "(");
 loop:
-		scheme_display(x->cons.car);
-		switch(x->cons.cdr->tag) {
+		scheme_display(x->cons_car);
+		switch(x->cons_cdr->tag) {
 		case TAG_NIL:
 			fprintf(stdout, ")");
 			break;
 		case TAG_CONS:
 			fprintf(stdout, " ");
-			x = x->cons.cdr;
+			x = x->cons_cdr;
 			goto loop;
 		default:
 			fprintf(stdout, " . ");
-			scheme_display(x->cons.cdr);
+			scheme_display(x->cons_cdr);
 			fprintf(stdout, ")");
 			break;
 		}
@@ -679,7 +688,7 @@ loop:
 		fprintf(stdout, "#<builtin>");
 		break;
 	case TAG_GC:
-		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x->gc.fwd) ? "dead" : "live");
+		fprintf(stdout, "#<gcfwd[%s]>", scheme_gc_dead(x->gc_fwd) ? "dead" : "live");
 		break;
 	default:
 		fprintf(stderr, "scheme_display: unknown Obj [%d].\n", x->tag);
@@ -710,9 +719,9 @@ struct Obj scheme_append(struct Obj *xs, struct Obj *ys) {
 	scheme_root_push(&t2);
 	scheme_root_push(&t3);
 
-	t1 = *xs->cons.cdr;
+	t1 = *xs->cons_cdr;
 	t2 = scheme_append(&t1, ys);
-	t3 = *xs->cons.car;
+	t3 = *xs->cons_car;
 	res = scheme_cons(&t3, &t2);
 
 	scheme_root_pop();
@@ -765,11 +774,11 @@ struct Obj scheme_zip_append(struct Obj *xs, struct Obj *ys, struct Obj *zs) {
 	scheme_root_push(&t5);
 	scheme_root_push(&t6);
 
-	t1 = *xs->cons.car;
-	t2 = *ys->cons.car;
+	t1 = *xs->cons_car;
+	t2 = *ys->cons_car;
 	t3 = scheme_cons(&t1, &t2);
-	t4 = *xs->cons.cdr;
-	t5 = *ys->cons.cdr;
+	t4 = *xs->cons_cdr;
+	t5 = *ys->cons_cdr;
 	t6 = scheme_zip_append(&t4, &t5, zs);
 	res = scheme_cons(&t3, &t6);
 
@@ -797,13 +806,13 @@ struct Obj scheme_assoc(struct Obj *key, struct Obj *table) {
 	}
 	
 	assert(table->tag == TAG_CONS);
-	assert(table->cons.car->tag == TAG_CONS);
+	assert(table->cons_car->tag == TAG_CONS);
 	
-	if(scheme_eq(key, table->cons.car->cons.car).tag != TAG_FALSE) {
-		return *table->cons.car;
+	if(scheme_eq(key, table->cons_car->cons_car).tag != TAG_FALSE) {
+		return *table->cons_car;
 	}
 	
-	return scheme_assoc(key, table->cons.cdr);
+	return scheme_assoc(key, table->cons_cdr);
 }
 
 struct Obj scheme_evlist(struct Obj *exps, struct Obj *env) {
@@ -829,8 +838,8 @@ struct Obj scheme_evlist(struct Obj *exps, struct Obj *env) {
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
 
-	t1 = *exps->cons.car;
-	t2 = *exps->cons.cdr;
+	t1 = *exps->cons_car;
+	t2 = *exps->cons_cdr;
 	t1 = scheme_eval(&t1, env);
 	t2 = scheme_evlist(&t2, env);
 	res = scheme_cons(&t1, &t2);
@@ -858,8 +867,8 @@ struct Obj scheme_make_begin(struct Obj *lst) {
       (car lst)
       (cons 'begin lst)))
 */
-	if(lst->cons.cdr->tag == TAG_NIL)
-		return *lst->cons.car;
+	if(lst->cons_cdr->tag == TAG_NIL)
+		return *lst->cons_car;
 	return scheme_cons(&sym_begin, lst);
 }
 
@@ -885,11 +894,11 @@ eval:
 			res = scheme_assoc(exp, &globals->obj);
 		}
 		if(res.tag == TAG_FALSE) {
-			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol.id));
+			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol_id));
 			exit(1);
 		}
 		assert(res.tag == TAG_CONS);
-		return *res.cons.cdr;
+		return *res.cons_cdr;
 	}
 	
 	if(exp->tag != TAG_CONS) {
@@ -897,25 +906,25 @@ eval:
 		exit(1);
 	}
 
-	if(scheme_eq_internal(exp->cons.car, &sym_quote)) {
+	if(scheme_eq_internal(exp->cons_car, &sym_quote)) {
 		// (quote <exp>)
 		
-		assert(exp->cons.cdr->cons.cdr->tag == TAG_NIL);
+		assert(exp->cons_cdr->cons_cdr->tag == TAG_NIL);
 		
-		return *exp->cons.cdr->cons.car;
+		return *exp->cons_cdr->cons_car;
 	}
 		
-	if(scheme_eq_internal(exp->cons.car, &sym_begin)) {
+	if(scheme_eq_internal(exp->cons_car, &sym_begin)) {
 		// (begin <exp> ...)
 		
 		scheme_root_push(&t1);
 
 		do {
-			*exp = *exp->cons.cdr;
+			*exp = *exp->cons_cdr;
 			assert(exp->tag == TAG_CONS);
 			
-			t1 = *exp->cons.car;
-			if(exp->cons.cdr->tag == TAG_NIL) {
+			t1 = *exp->cons_car;
+			if(exp->cons_cdr->tag == TAG_NIL) {
 				// this is the final one, tail position
 				// so do not recursively call eval
 				scheme_root_pop();
@@ -928,21 +937,21 @@ eval:
 		} while(1);
 	}
 
-	if(scheme_eq_internal(exp->cons.car, &sym_if)) {
+	if(scheme_eq_internal(exp->cons_car, &sym_if)) {
 		// (if t1 t2 t3)
 		
-		assert(exp->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
+		assert(exp->cons_cdr->tag == TAG_CONS);
+		assert(exp->cons_cdr->cons_cdr->tag == TAG_CONS);
+		assert(exp->cons_cdr->cons_cdr->cons_cdr->tag == TAG_CONS);
+		assert(exp->cons_cdr->cons_cdr->cons_cdr->cons_cdr->tag == TAG_NIL);
 
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
 		scheme_root_push(&t3);
 		
-		t1 = *exp->cons.cdr->cons.car;
-		t2 = *exp->cons.cdr->cons.cdr->cons.car;
-		t3 = *exp->cons.cdr->cons.cdr->cons.cdr->cons.car;
+		t1 = *exp->cons_cdr->cons_car;
+		t2 = *exp->cons_cdr->cons_cdr->cons_car;
+		t3 = *exp->cons_cdr->cons_cdr->cons_cdr->cons_car;
 		
 		t1 = scheme_eval(&t1, env);
 		
@@ -960,17 +969,17 @@ eval:
 		goto eval;
 	}
 
-	if(scheme_eq_internal(exp->cons.car, &sym_lambda)) {
+	if(scheme_eq_internal(exp->cons_car, &sym_lambda)) {
 		// (lambda <args> <body> ...)
 		
-		assert(exp->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
+		assert(exp->cons_cdr->tag == TAG_CONS);
+		assert(exp->cons_cdr->cons_cdr->tag == TAG_CONS);
 		
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
 		
-		t1 = *exp->cons.cdr->cons.car;
-		t2 = *exp->cons.cdr->cons.cdr;
+		t1 = *exp->cons_cdr->cons_car;
+		t2 = *exp->cons_cdr->cons_cdr;
 		t2 = scheme_make_begin(&t2);
 		
 		res = scheme_closure(&t1, env, &t2);
@@ -988,32 +997,32 @@ eval:
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
 	
-	f = *exp->cons.car;
-	vals = *exp->cons.cdr;
+	f = *exp->cons_car;
+	vals = *exp->cons_cdr;
 	
 	f = scheme_eval(&f, env);
 	vals = scheme_evlist(&vals, env);
 	
 	if(f.tag == TAG_CLOSURE) {
-		*exp = *f.closure.body;
-		*env = scheme_zip_append(f.closure.args, &vals, f.closure.env);
+		*exp = *f.closure_body;
+		*env = scheme_zip_append(f.closure_args, &vals, f.closure_env);
 	}
 	else if(f.tag == TAG_BUILTIN) {
-		for(i = 0; i < f.builtin.n_args; i++) {
+		for(i = 0; i < f.builtin_n_args; i++) {
 			scheme_root_push(&args[i]);
 			if(vals.tag != TAG_CONS) {
 				fprintf(stderr, "scheme_eval: too few args when calling builtin.\n");
 				exit(1);
 			}
-			args[i] = *vals.cons.car;
-			vals = *vals.cons.cdr;
+			args[i] = *vals.cons_car;
+			vals = *vals.cons_cdr;
 		}
 		if(vals.tag != TAG_NIL) {
 			fprintf(stderr, "scheme_eval: too many args when calling builtin.\n");
 			exit(1);
 		}
-		res = f.builtin.impl(args);
-		for(i = 0; i < f.builtin.n_args + 4; i++) { // + 4 for f, vals, t1, t2
+		res = f.builtin_impl(args);
+		for(i = 0; i < f.builtin_n_args + 4; i++) { // + 4 for f, vals, t1, t2
 			scheme_root_pop();
 		}
 		return res;
@@ -1039,9 +1048,9 @@ int scheme_shape_define(struct Obj *exp) {
 //        (pair? (cddr exp)))
 	return
 		exp->tag == TAG_CONS &&
-		scheme_eq_internal(exp->cons.car, &sym_define) &&
-		exp->cons.cdr->tag == TAG_CONS &&
-		exp->cons.cdr->cons.cdr->tag == TAG_CONS;
+		scheme_eq_internal(exp->cons_car, &sym_define) &&
+		exp->cons_cdr->tag == TAG_CONS &&
+		exp->cons_cdr->cons_cdr->tag == TAG_CONS;
 }
 
 struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
@@ -1053,8 +1062,8 @@ struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
 		
-		t1 = *exp->cons.cdr->cons.car;
-		t2 = *exp->cons.cdr->cons.cdr;
+		t1 = *exp->cons_cdr->cons_car;
+		t2 = *exp->cons_cdr->cons_cdr;
 		t2 = scheme_make_begin(&t2);
 		t2 = scheme_eval(&t2, env);
 		t1 = scheme_cons(&t1, &t2);
@@ -1086,12 +1095,12 @@ struct Obj scheme_builtin_eq(struct Obj *args) {
 
 struct Obj scheme_builtin_car(struct Obj *args) {
 	assert(args[0].tag == TAG_CONS);
-	return *args[0].cons.car;
+	return *args[0].cons_car;
 }
 
 struct Obj scheme_builtin_cdr(struct Obj *args) {
 	assert(args[0].tag == TAG_CONS);
-	return *args[0].cons.cdr;
+	return *args[0].cons_cdr;
 }
 
 struct Obj scheme_builtin_cons(struct Obj *args) {
@@ -1106,7 +1115,7 @@ void scheme_builtins_init(void) {
 #define BUILTIN_(IMPL, NAME, NARGS) \
 	do { \
 		assert(NARGS <= MAX_BUILTIN_ARGS); \
-		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL }; \
+		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin_n_args = NARGS, .builtin_impl = scheme_builtin_ ## IMPL }; \
 		nm = scheme_symbol_intern(NAME); \
 		tmp = scheme_cons(&nm, &tmp); \
 		globals->obj = scheme_cons(&tmp, &globals->obj); \
