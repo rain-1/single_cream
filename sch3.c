@@ -1091,6 +1091,10 @@ struct Obj scheme_builtin_eq(struct Obj *args) {
 	return scheme_eq(&args[0], &args[1]);
 }
 
+struct Obj scheme_builtin_cons(struct Obj *args) {
+	return scheme_cons(&args[0], &args[1]);
+}
+
 struct Obj scheme_builtin_car(struct Obj *args) {
 	assert(args[0].tag == TAG_CONS);
 	return *args[0].cons.car;
@@ -1101,9 +1105,29 @@ struct Obj scheme_builtin_cdr(struct Obj *args) {
 	return *args[0].cons.cdr;
 }
 
-struct Obj scheme_builtin_cons(struct Obj *args) {
-	return scheme_cons(&args[0], &args[1]);
+struct Obj scheme_builtin_set_car(struct Obj *args) {
+	assert(args[0].tag == TAG_CONS);
+	*args[0].cons.car = args[1];
+	return const_nil;
 }
+
+struct Obj scheme_builtin_set_cdr(struct Obj *args) {
+	assert(args[0].tag == TAG_CONS);
+	*args[0].cons.cdr = args[1];
+	return const_nil;
+}
+
+#define DEFINE_ARITH_BUILTIN(NM, OP) \
+struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
+	assert(args[0].tag == TAG_NUMBER); \
+	assert(args[1].tag == TAG_NUMBER); \
+	return (struct Obj){ .tag = TAG_NUMBER, .number.val = args[0].number.val OP args[1].number.val }; \
+}
+DEFINE_ARITH_BUILTIN(plus, +)
+DEFINE_ARITH_BUILTIN(minus, -)
+DEFINE_ARITH_BUILTIN(times, *)
+DEFINE_ARITH_BUILTIN(quotient, /)
+DEFINE_ARITH_BUILTIN(remainder, %)
 
 void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
@@ -1122,9 +1146,17 @@ void scheme_builtins_init(void) {
 	BUILTIN(display, 1);
 	BUILTIN_(eq, "eq?", 2);
 
+	BUILTIN(cons, 2);
 	BUILTIN(car, 1);
 	BUILTIN(cdr, 1);
-	BUILTIN(cons, 2);
+	BUILTIN_(set_car, "set-car!", 2);
+	BUILTIN_(set_cdr, "set-cdr!", 2);
+
+	BUILTIN_(plus, "+", 2);
+	BUILTIN_(minus, "-", 2);
+	BUILTIN_(times, "*", 2);
+	BUILTIN(quotient, 2);
+	BUILTIN(remainder, 2);
 
 	scheme_root_pop();
 	scheme_root_pop();
