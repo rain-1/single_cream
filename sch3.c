@@ -1058,6 +1058,10 @@ struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 	
 	if(scheme_shape_define(exp)) {
 		// (define t1 t2 ...)
+
+		// TODO:
+		// (define (t1 args ...) t2 ...) =>
+		// (define t1 (lambda (args ...) t2 ...)
 		
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
