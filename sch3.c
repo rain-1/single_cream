@@ -1039,11 +1039,13 @@ loop_begin:
 }
 
 int scheme_shape_define(struct Obj *exp) {
-// (define (def? exp)
-//   (and (pair? exp)
-//        (eq? (car exp) 'define)
-//        (pair? (cdr exp))
-//        (pair? (cddr exp)))
+/*
+(define (def? exp)
+  (and (pair? exp)
+       (eq? (car exp) 'define)
+       (pair? (cdr exp))
+       (pair? (cddr exp)))
+*/
 	return
 		exp->tag == TAG_CONS &&
 		scheme_eq_internal(exp->cons.car, &sym_define) &&
