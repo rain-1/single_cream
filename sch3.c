@@ -1053,15 +1053,48 @@ int scheme_shape_define(struct Obj *exp) {
 		exp->cons.cdr->cons.cdr->tag == TAG_CONS;
 }
 
-struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
+struct Obj scheme_curry_definition(struct Obj *exp) {
+/*
+(define (curry-def def)
+  `(define ,(car (cadr def)) (lambda ,(cdr (cadr def)) . ,(cddr def))))
+                 ^ t1                       ^ t2            ^ t3
+*/
 	struct Obj t1, t2, t3;
 	
+	scheme_root_push(&t1);
+	scheme_root_push(&t2);
+	scheme_root_push(&t3);
+
+	t1 = *exp->cons.cdr->cons.car->cons.car;
+	t2 = *exp->cons.cdr->cons.car->cons.cdr;
+	t3 = *exp->cons.cdr->cons.cdr;
+	
+	t3 = scheme_cons(&t2, &t3);
+	t3 = scheme_cons(&sym_lambda, &t3);
+	t3 = scheme_cons(&t3, &const_nil);
+	t3 = scheme_cons(&t1, &t3);
+	t3 = scheme_cons(&sym_define, &t3);
+	
+	scheme_root_pop();
+	scheme_root_pop();
+	scheme_root_pop();
+	
+	return t3;
+}
+
+struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
+	struct Obj t1, t2;
+	
 	if(scheme_shape_define(exp)) {
+define_loop:
 		// (define t1 t2 ...)
 
-		// TODO:
 		// (define (t1 args ...) t2 ...) =>
 		// (define t1 (lambda (args ...) t2 ...)
+		if(exp->cons.cdr->cons.car->tag == TAG_CONS) {
+			*exp = scheme_curry_definition(exp);
+			goto define_loop;
+		}
 		
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
