@@ -1215,6 +1215,9 @@ int main(int argc, char **argv) {
 	do {
 		rt->obj = const_nil;
 		scheme_read(&rt->obj, &line_no);
+		
+		if(rt->obj.tag == TAG_EOF)
+			break;
 
 		res->obj = scheme_exec(&rt->obj, &rt2->obj);
 		scheme_display(&res->obj);
@@ -1222,7 +1225,7 @@ int main(int argc, char **argv) {
 		
 		res->obj = const_nil;
 		scheme_gc();
-	} while(rt->obj.tag != TAG_EOF);
+	} while(1);
 	return 0;
 }
 

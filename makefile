@@ -40,3 +40,7 @@ bindir:=$(DESTDIR)$(PREFIX)/bin
 install: sch3
 	mkdir -p $(bindir)
 	cp $^ $(bindir)
+
+.PHONY: test
+test:
+	tests t/ './bin/sch3 < {}'
