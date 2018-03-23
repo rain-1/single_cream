@@ -1,5 +1,24 @@
 ;;;; NOT
 (define (not b) (if b #f #t))
+(define = eq?)
+
+;;;; PRINT
+(define (print p) (display p) (newline))
+
+;;;; EQUAL
+(define (equal? x y)
+;; TODO: string equality
+  (print 'equal?)
+  (print x)
+  (print y)
+  (if (pair? x)
+      (if (pair? y)
+	  (if (equal? (car x) (car y))
+	      (equal? (cdr x) (cdr y))
+	      #f)
+	  #f)
+      (eq? x y)))
+
 
 ;;;; CXR
 (define (caar x) (car (car x)))

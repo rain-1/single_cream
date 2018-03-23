@@ -48,7 +48,7 @@ struct Root {
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
-#define ROOTSTACK_SIZE 120
+#define ROOTSTACK_SIZE 1024
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
 
@@ -454,7 +454,9 @@ LBL(read_buf)
 		if(c == '(' || c == ')')
 			UNGETCHAR(c, stdin);
 
-		if(buf[0] == '-' || ('0' <= buf[0] && buf[0] <= '9')) {
+		// TODO: we should really check that all chars are digits
+		if((buf[0] == '-' && buf[1] != '\0') ||
+                   ('0' <= buf[0] && buf[0] <= '9')) {
 			*rt = (struct Obj){ .tag = TAG_NUMBER, .number.val = atoi(buf) };
 			return;
 		}
@@ -866,9 +868,16 @@ struct Obj scheme_make_begin(struct Obj *lst) {
       (car lst)
       (cons 'begin lst)))
 */
+	struct Obj tmp;
+
 	if(lst->cons.cdr->tag == TAG_NIL)
 		return *lst->cons.car;
-	return scheme_cons(&sym_begin, lst);
+	
+	scheme_root_push(&tmp);
+	tmp = *lst;
+	tmp = scheme_cons(&sym_begin, &tmp);
+	scheme_root_pop();
+	return tmp;
 }
 
 struct Obj scheme_eval(struct Obj *exp, struct Obj *env) {
@@ -1002,8 +1011,10 @@ loop_begin:
 	vals = scheme_evlist(&vals, env);
 	
 	if(f.tag == TAG_CLOSURE) {
+		t1 = *f.closure.args;
 		*exp = *f.closure.body;
-		*env = scheme_zip_append(f.closure.args, &vals, f.closure.env);
+		*env = *f.closure.env;
+		*env = scheme_zip_append(&t1, &vals, env);
 	}
 	else if(f.tag == TAG_BUILTIN) {
 		for(i = 0; i < f.builtin.n_args; i++) {
@@ -1131,6 +1142,11 @@ struct Obj scheme_builtin_display(struct Obj *args) {
 	return const_nil;
 }
 
+struct Obj scheme_builtin_newline(struct Obj *args) {
+	puts("");
+	return const_nil;
+}
+
 struct Obj scheme_builtin_eq(struct Obj *args) {
 	return scheme_eq(&args[0], &args[1]);
 }
@@ -1173,6 +1189,24 @@ DEFINE_ARITH_BUILTIN(times, *)
 DEFINE_ARITH_BUILTIN(quotient, /)
 DEFINE_ARITH_BUILTIN(remainder, %)
 
+#define DEFINE_TYPE_PREDICATE_BUILTIN(NM, TAG) \
+struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
+	return (args[0].tag == TAG) ? const_true : const_false; \
+}
+DEFINE_TYPE_PREDICATE_BUILTIN(eof_objectp, TAG_EOF)
+DEFINE_TYPE_PREDICATE_BUILTIN(symbolp, TAG_SYMBOL)
+DEFINE_TYPE_PREDICATE_BUILTIN(numberp, TAG_NUMBER)
+DEFINE_TYPE_PREDICATE_BUILTIN(charp, TAG_CHARACTER)
+DEFINE_TYPE_PREDICATE_BUILTIN(stringp, TAG_STRING)
+DEFINE_TYPE_PREDICATE_BUILTIN(nullp, TAG_NIL)
+DEFINE_TYPE_PREDICATE_BUILTIN(pairp, TAG_CONS)
+struct Obj scheme_builtin_booleanp(struct Obj *args) { \
+	return (args[0].tag == TAG_TRUE || args[0].tag == TAG_FALSE) ? const_true : const_false; \
+}
+struct Obj scheme_builtin_procedurep(struct Obj *args) { \
+	return (args[0].tag == TAG_CLOSURE || args[0].tag == TAG_BUILTIN) ? const_true : const_false; \
+}
+	
 void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
 	scheme_root_push(&tmp);
@@ -1188,6 +1222,7 @@ void scheme_builtins_init(void) {
 	} while(0)
 
 	BUILTIN(display, 1);
+	BUILTIN(newline, 0);
 	BUILTIN_(eq, "eq?", 2);
 
 	BUILTIN(cons, 2);
@@ -1201,6 +1236,16 @@ void scheme_builtins_init(void) {
 	BUILTIN_(times, "*", 2);
 	BUILTIN(quotient, 2);
 	BUILTIN(remainder, 2);
+
+	BUILTIN_(eof_objectp, "eof-object?", 1);
+	BUILTIN_(symbolp, "symbol?", 1);
+	BUILTIN_(numberp, "number?", 1);
+	BUILTIN_(charp, "char?", 1);
+	BUILTIN_(stringp, "string?", 1);
+	BUILTIN_(nullp, "null?", 1);
+	BUILTIN_(pairp, "pair?", 1);
+	BUILTIN_(booleanp, "boolean?", 1);
+	BUILTIN_(procedurep, "procedure?", 1);
 
 	scheme_root_pop();
 	scheme_root_pop();
@@ -1225,7 +1270,6 @@ int main(int argc, char **argv) {
 			break;
 
 		res->obj = scheme_exec(&rt->obj, &rt2->obj);
-		
 		res->obj = const_nil;
 		scheme_gc();
 	} while(1);

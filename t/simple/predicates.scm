@@ -1,0 +1,45 @@
+;; TODO: (eof-object? )
+
+(symbol? 'x)
+(symbol? 5)
+(symbol? #t)
+(symbol? '())
+(symbol? '(a . b))
+
+(number? 'x)
+(number? 5)
+(number? #t)
+(number? '())
+(number? '(a . b))
+
+(char? 'x)
+(char? 5)
+(char? #t)
+(char? '())
+(char? '(a . b))
+
+(string? 'x)
+(string? 5)
+(string? #t)
+(string? '())
+(string? '(a . b))
+
+(null? 'x)
+(null? 5)
+(null? #t)
+(null? '())
+(null? '(a . b))
+
+(pair? 'x)
+(pair? 5)
+(pair? #t)
+(pair? '())
+(pair? '(a . b))
+
+(boolean? #t)
+(boolean? #f)
+(boolean? '())
+
+(procedure? (lambda (i) i))
+(procedure? procedure?)
+(procedure? 5)

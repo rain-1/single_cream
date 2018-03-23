@@ -1,0 +1,12 @@
+(define (mk-list e n) (if (= n 0) '() (cons e (mk-list e (- n 1)))))
+(mk-list 'ufo 5)
+(mk-list 'ufo 10)
+(mk-list 'ufo 5)
+(mk-list 'ufo 10)
+(mk-list 'ufo 5)
+(mk-list 'ufo 10)
+(mk-list 'ufo 5)
+(mk-list 'ufo 10)
+(mk-list 'ufo 5)
+(mk-list 'ufo 10)
+
