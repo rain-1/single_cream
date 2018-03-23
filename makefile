@@ -43,4 +43,4 @@ install: sch3
 
 .PHONY: test
 test:
-	tests t/ './bin/sch3 < {}'
+	tests t/ 'cat init.scm {} | ./bin/sch3'

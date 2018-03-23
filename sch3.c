@@ -44,7 +44,7 @@ struct Root {
 	struct Obj obj;
 };
 
-#define SEMISPACE_SIZE 120
+#define SEMISPACE_SIZE 1024
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
@@ -1026,7 +1026,7 @@ loop_begin:
 		return res;
 	}
 	else {
-		fprintf(stderr, "scheme_eval: applying a non function.\n");
+		fprintf(stderr, "scheme_eval: applying a non function [%d].\n", exp->tag);
 		exit(1);
 	}
 	
@@ -1084,6 +1084,7 @@ struct Obj scheme_curry_definition(struct Obj *exp) {
 
 struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
 	struct Obj t1, t2;
+	struct Obj res;
 	
 	if(scheme_shape_define(exp)) {
 define_loop:
@@ -1113,7 +1114,11 @@ define_loop:
 		return const_nil;
 	}
 	
-	return scheme_eval(exp, env);
+	res = scheme_eval(exp, env);
+	scheme_display(&res);
+	puts("");
+
+	return res;
 }
 
 
@@ -1220,8 +1225,6 @@ int main(int argc, char **argv) {
 			break;
 
 		res->obj = scheme_exec(&rt->obj, &rt2->obj);
-		scheme_display(&res->obj);
-		puts("");
 		
 		res->obj = const_nil;
 		scheme_gc();
