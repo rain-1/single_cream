@@ -1,0 +1,6 @@
+(define l '((a . 1) (b . 2) (c . 3) (d . 4) (e . 5)))
+(map car l)
+(map cdr l)
+(map (lambda (i) i) l)
+(define (swap k) (cons (cdr k) (car k)))
+(map swap l)

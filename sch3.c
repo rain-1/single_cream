@@ -880,12 +880,29 @@ struct Obj scheme_make_begin(struct Obj *lst) {
 	return tmp;
 }
 
-struct Obj scheme_eval(struct Obj *exp, struct Obj *env) {
-	// Assumes exp is rooted, and destroys it by overwriting
+struct Obj scheme_eval_internal(struct Obj *exp, struct Obj *env);
+struct Obj scheme_eval(struct Obj *exp_in, struct Obj *env_in) {
+	struct Obj exp, env;
+	struct Obj res;
+	
+	scheme_root_push(&exp);
+	scheme_root_push(&env);
+
+	exp = *exp_in;
+	env = *env_in;
+
+	res = scheme_eval_internal(&exp, &env);
+	
+	scheme_root_pop();
+	scheme_root_pop();
+	
+	return res;
+}
+
+struct Obj scheme_eval_internal(struct Obj *exp, struct Obj *env) {
 	// The crucial thing in this evaluator is to never recursively call 'eval' from a tail position
-	
 	// TODO: properly shadow builtins like begin, if etc.
-	
+
 	struct Obj f, vals;
 	struct Obj t1, t2, t3;
 	struct Obj res;
@@ -926,6 +943,7 @@ eval:
 		// (begin <exp> ...)
 		
 		scheme_root_push(&t1);
+		scheme_root_push(env);
 loop_begin:
 		*exp = *exp->cons.cdr;
 		assert(exp->tag == TAG_CONS);
@@ -935,6 +953,7 @@ loop_begin:
 			// this is the final one, tail position
 			// so do not recursively call eval
 			*exp = t1;
+			scheme_root_pop();
 			scheme_root_pop();
 			goto eval;
 		}
@@ -1031,7 +1050,7 @@ loop_begin:
 			exit(1);
 		}
 		res = f.builtin.impl(args);
-		for(i = 0; i < f.builtin.n_args + 4; i++) { // + 4 for f, vals, t1, t2
+		for(i = 0; i < f.builtin.n_args + 4; i++) { // + 4 for f, vals, env, t1, t2
 			scheme_root_pop();
 		}
 		return res;
@@ -1269,6 +1288,7 @@ int main(int argc, char **argv) {
 		if(rt->obj.tag == TAG_EOF)
 			break;
 
+		rt2->obj = const_nil;
 		res->obj = scheme_exec(&rt->obj, &rt2->obj);
 		res->obj = const_nil;
 		scheme_gc();

@@ -33,3 +33,7 @@ struct Obj scheme_cons(struct Root *x, struct Root *y) {
 }
 
 seems to be correct
+
+------------
+
+TODO: Information about direct and indirectly rooted objects.

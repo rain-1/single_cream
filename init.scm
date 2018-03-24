@@ -39,3 +39,10 @@
 (define (cddddr x) (cdddr (cdr x)))
 (define (cadadr x) (cadar (cdr x)))
 (define (cddadr x) (cdr (cdr (car (cdr x)))))
+
+;;;; LIST
+(define (map f l)
+  (if (null? l)
+      '()
+      (cons (f (car l))
+            (map f (cdr l)))))
