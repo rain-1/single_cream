@@ -44,15 +44,15 @@ struct Root {
 	struct Obj obj;
 };
 
-#define SEMISPACE_SIZE 1024
+#define SEMISPACE_SIZE (1<<11)
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
-#define ROOTSTACK_SIZE 1024
+#define ROOTSTACK_SIZE (1<<10)
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
 
-#define MAX_SYMBOLS 4096
+#define MAX_SYMBOLS (1<<8)
 char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
