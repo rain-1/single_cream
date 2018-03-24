@@ -46,3 +46,22 @@
       '()
       (cons (f (car l))
             (map f (cdr l)))))
+
+(define (append x y)
+  (if (null? x)
+      y
+      (cons (car x) (append (cdr x) y))))
+
+(define (revappend l r)
+  (if (null? l)
+      r
+      (revappend (cdr l) (cons (car l) r))))
+
+(define (reverse l) (revappend l '()))
+
+(define (filter p l)
+  (if (null? l)
+      '()
+      (if (p (car l))
+          (cons (car l) (filter p (cdr l)))
+          (filter p (cdr l)))))
