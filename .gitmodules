@@ -1,0 +1,4 @@
+[submodule "tests"]
+	path = tests
+	url = https://github.com/rain-1/tests.git
+	branch = master
