@@ -2,15 +2,22 @@
 (define (not b) (if b #f #t))
 (define = eq?)
 
+;; NUMBERS
+(define (zero? x) (= x 0))
+(define (even? x) (= 0 (modulo x 2)))
+(define (odd? x) (not (even? x)))
+(define (positive? x) (> x 0))
+(define (negative? x) (< x 0))
+(define (abs x) (if (negative? x) (- 0 x) x))
+(define (min x y) (if (< x y) x y))
+(define (max x y) (if (> x y) x y))
+
 ;;;; PRINT
 (define (print p) (display p) (newline))
 
 ;;;; EQUAL
 (define (equal? x y)
 ;; TODO: string equality
-  (print 'equal?)
-  (print x)
-  (print y)
   (if (pair? x)
       (if (pair? y)
 	  (if (equal? (car x) (car y))
@@ -65,3 +72,36 @@
       (if (p (car l))
           (cons (car l) (filter p (cdr l)))
           (filter p (cdr l)))))
+
+(define (member elt lst)
+  (if (null? lst)
+      #f
+      (if (equal? elt (car lst))
+          #t
+          (member elt (cdr lst)))))
+
+(define (fold kons knil lst)
+  (if (null? lst)
+      knil
+      (kons (car lst)
+	    (fold kons knil (cdr lst)))))
+
+(define (replicate n elt)
+  (if (= n 0) '() (cons elt (replicate (- n 1) elt))))
+
+(define (foldl f a xs)
+  (if (null? xs)
+      a
+      (foldl f (f a (car xs)) (cdr xs))))
+
+(define (minimum xs)
+  (if (pair? xs)
+      (foldl min (car xs) (cdr xs))
+      #f))
+
+(define (maximum xs)
+  (if (pair? xs)
+      (foldl max (car xs) (cdr xs))
+      #f))
+
+(define (sum lst) (foldl + 0 lst))

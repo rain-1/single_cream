@@ -1225,7 +1225,18 @@ struct Obj scheme_builtin_booleanp(struct Obj *args) { \
 struct Obj scheme_builtin_procedurep(struct Obj *args) { \
 	return (args[0].tag == TAG_CLOSURE || args[0].tag == TAG_BUILTIN) ? const_true : const_false; \
 }
-	
+
+#define DEFINE_ARITH_COMPARE_BUILTIN(NM, OP) \
+struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
+	assert(args[0].tag == TAG_NUMBER); \
+	assert(args[1].tag == TAG_NUMBER); \
+	return (args[0].number.val OP args[1].number.val) ? const_true : const_false; \
+}
+DEFINE_ARITH_COMPARE_BUILTIN(lt, <);
+DEFINE_ARITH_COMPARE_BUILTIN(gt, >);
+DEFINE_ARITH_COMPARE_BUILTIN(le, <=);
+DEFINE_ARITH_COMPARE_BUILTIN(ge, >=);
+
 void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
 	scheme_root_push(&tmp);
@@ -1265,6 +1276,11 @@ void scheme_builtins_init(void) {
 	BUILTIN_(pairp, "pair?", 1);
 	BUILTIN_(booleanp, "boolean?", 1);
 	BUILTIN_(procedurep, "procedure?", 1);
+
+	BUILTIN_(lt, "<", 2);
+	BUILTIN_(gt, ">", 2);
+	BUILTIN_(le, "<=", 2);
+	BUILTIN_(ge, ">=", 2);
 
 	scheme_root_pop();
 	scheme_root_pop();
