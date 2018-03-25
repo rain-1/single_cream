@@ -1,0 +1,20 @@
+(define (sum-t t)
+  (if (number? t)
+      t
+      (+ (sum-t (car t)) (sum-t (cdr t)))))
+(define (dup x) (cons x x))
+(define (pot-t n)
+  (if (= n 0)
+      1
+      (dup (pot-t (- n 1)))))
+(define (pot n) (sum-t (pot-t n)))
+(pot 1)
+(pot 2)
+(pot 3)
+(pot 4)
+(pot 5)
+(pot 6)
+(pot 7)
+(pot 8)
+(pot 9)
+
