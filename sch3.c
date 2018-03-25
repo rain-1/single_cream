@@ -44,7 +44,7 @@ struct Root {
 	struct Obj obj;
 };
 
-#define SEMISPACE_SIZE (1<<11)
+#define SEMISPACE_SIZE (1<<12)
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
