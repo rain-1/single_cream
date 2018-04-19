@@ -10,6 +10,13 @@ The aims of this project are:
 
 # Usage
 
+Make sure you get the tests submodule:
+
+```
+git submodule init
+git submodule update
+```
+
 * `make` to build everything.
 * `./util/run.sh <filename.scm>` to run a script file.
 * `./util/repl.sh` to try out expressions in the REPL. Uses rlwrap.
