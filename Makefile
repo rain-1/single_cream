@@ -39,6 +39,6 @@ install: sch3
 
 .PHONY: test
 test:
-	tests t/trivial './util/run.sh {}'
-	tests t/simple './util/run.sh {}'
-	tests t/mal './util/run.sh {}'
+	./tests/tests t/trivial './util/run.sh {}'
+	./tests/tests t/simple './util/run.sh {}'
+	./tests/tests t/mal './util/run.sh {}'
