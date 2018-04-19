@@ -1,2 +1,2 @@
-#!/bin/sh
-(cat init.scm ; cat) | ./bin/sch3
+#!/bin/bash
+(cat src/init.scm ; rlwrap cat) | ./bin/sch3

@@ -21,17 +21,13 @@ CFLAGS=-D_GNU_SOURCE -O0 -std=c99 -ggdb -Wall -Werror -Wno-unused-variable
 
 all: sch3
 
-sch3: sch3.c | bin
-	$(CC) $(CFLAGS) sch3.c -o bin/sch3
-
-# Directories
-bin:
-	mkdir -p bin
+sch3: src/sch3.c
+	$(CC) $(CFLAGS) src/sch3.c -o bin/sch3
 
 # Clean up after ourselves
 .PHONY: clean
 clean:
-	rm -rf bin/
+	rm -f bin/sch3
 
 DESTDIR:=
 PREFIX:=/usr/local
@@ -43,6 +39,6 @@ install: sch3
 
 .PHONY: test
 test:
-	./tests/tests t/trivial 'cat init.scm {} | ./bin/sch3'
-	./tests/tests t/simple 'cat init.scm {} | ./bin/sch3'
-	./tests/tests t/mal 'cat init.scm {} | ./bin/sch3'
+	tests t/trivial './util/run.sh {}'
+	tests t/simple './util/run.sh {}'
+	tests t/mal './util/run.sh {}'
