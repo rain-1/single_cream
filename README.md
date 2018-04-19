@@ -20,3 +20,13 @@ git submodule update
 * `make` to build everything.
 * `./util/run.sh <filename.scm>` to run a script file.
 * `./util/repl.sh` to try out expressions in the REPL. Uses rlwrap.
+
+# Tests
+
+It's very useful to have a comprehensive set of tests. Our tests are divided into suites, feel free to make new ones and import tests from other places.
+
+* `t/trivial`: Extremely simple tests, checking that various objects can be READ and printed back.
+* `t/simple`: Basic functionality tests for primitive functions. Also used to make sure simple recursive functions and such work before adding them to `init.scm`.
+* `t/mal`: Taken some tests for the 'make a lisp' project.
+
+
