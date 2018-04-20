@@ -46,6 +46,11 @@ and at the top level
 * `(define (<name> <args> ...) <body> ...)`
 
 
+# Semantics
+
+As normal with scheme the language is essentially a strict lambda calculus with GC and proper tail calls. We don't implement any first class continuation operators.
+
+
 # Functions
 
 The builtin functions provided are
