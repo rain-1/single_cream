@@ -26,7 +26,6 @@
 	  #f)
       (eq? x y)))
 
-
 ;;;; CXR
 (define (caar x) (car (car x)))
 (define (cadr x) (car (cdr x)))
@@ -105,3 +104,10 @@
       #f))
 
 (define (sum lst) (foldl + 0 lst))
+
+(define (assoc key table)
+  (if (null? table)
+      #f
+      (if (equal? key (caar table))
+	  (car table)
+	  (assoc key (cdr table)))))

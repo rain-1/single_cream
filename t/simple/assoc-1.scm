@@ -1,0 +1,11 @@
+(define t '((a . 1)
+	    (x . 7)
+	    (b . 2)
+	    (y . 6)
+	    (c . 3)
+	    (z . 5)))
+
+(assoc 'a t)
+(assoc 'b t)
+(assoc 'c t)
+(assoc 'w t)
