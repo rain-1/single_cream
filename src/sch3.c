@@ -563,6 +563,7 @@ void scheme_build_string(struct Obj *rt, char *str) {
 	
 	struct Obj rt_1;
 	
+	*rt = const_nil;
 	for(i = strlen(str)-1; i >= 0; i--) {
 		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .character.val = str[i] };
 		*rt = scheme_cons(&rt_1, rt);
