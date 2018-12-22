@@ -1,6 +1,7 @@
 ;;;; NOT
 (define (not b) (if b #f #t))
 (define = eq?)
+(define char=? =)
 
 ;; NUMBERS
 (define (zero? x) (= x 0))
@@ -17,7 +18,6 @@
 
 ;;;; EQUAL
 (define (equal? x y)
-;; TODO: string equality
   (if (pair? x)
       (if (pair? y)
 	  (if (equal? (car x) (car y))
@@ -47,6 +47,20 @@
 (define (cddadr x) (cdr (cdr (car (cdr x)))))
 
 ;;;; LIST
+(define (length lxst) (length/acc lxst 0))
+(define (length/acc lest acc)
+  (if (null? lest)
+      acc
+      (length/acc (cdr lest) (+ 1 acc))))
+
+(define (list-ref lst i)
+  (if (pair? lst)
+      (if (= i 0)
+	  (car lst)
+	  (list-ref (cdr lst) (- i 1)))
+      #f ;; XXX ERROR
+      ))
+
 (define (map f l)
   (if (null? l)
       '()

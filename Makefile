@@ -42,3 +42,4 @@ test:
 	./tests/tests t/trivial './util/run.sh {}'
 	./tests/tests t/simple './util/run.sh {}'
 	./tests/tests t/mal './util/run.sh {}'
+	./tests/tests t/rosetta './util/run.sh {}'
