@@ -14,7 +14,6 @@ enum Tag {
 	TAG_SYMBOL	= 3,
 	TAG_NUMBER	= 4,
 	TAG_CHARACTER	= 5,
-	TAG_STRING	= 6,
 	TAG_NIL		= 7,
 	TAG_CONS	= 8,
 	TAG_CLOSURE	= 9,
@@ -29,7 +28,6 @@ struct Obj {
 		struct { int id; } symbol;
 		struct { int val; } number;
 		struct { char val; } character;
-		struct { int len; char *text; } string;
 		struct { struct Obj *car, *cdr; } cons;
 		struct { struct Obj *args, *env, *body; } closure;
 		struct { int n_args; struct Obj (*impl)(struct Obj *args); } builtin;
@@ -325,6 +323,7 @@ char *scheme_symbol_name(int id) {
  * SECTION reader
  */
 
+void scheme_build_string(struct Obj *rt, char *str);
 void scheme_read_many(struct Obj *rt, int *line_no);
 
 //#define DEBUG
@@ -436,8 +435,7 @@ LBL(read_atom_string)
 		exit(1);
 	}
 	if(c == '"') {
-		// TODO: make a string
-		*rt = scheme_symbol_intern(buf);
+		scheme_build_string(rt, buf);
 		return;
 	}
 	if(c == '\\') {
@@ -515,6 +513,21 @@ LBL(read_shorthand)
 		exit(1);
 	}
 	return;
+}
+
+void scheme_build_string(struct Obj *rt, char *str) {
+	int i;
+	
+	struct Obj rt_1;
+	
+	for(i = strlen(str); i >= 0; i--) {
+		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .character.val = str[i] };
+		*rt = scheme_cons(&rt_1, rt);
+	}
+	
+	*rt = scheme_cons(rt, NULL);
+	*rt = scheme_cons(NULL, rt);
+	*rt->cons.car = sym_quote;
 }
 
 void scheme_read_many(struct Obj *rt, int *line_no) {
@@ -604,8 +617,6 @@ int scheme_eq_internal(struct Obj *x, struct Obj *y) {
 
 	case TAG_CONS:
 		return x->cons.car == y->cons.car && x->cons.cdr == y->cons.cdr;
-	case TAG_STRING:
-		return x->string.len == y->string.len && x->string.text == y->string.text;
 
 	case TAG_CLOSURE:
 		return
@@ -648,6 +659,7 @@ void scheme_display(struct Obj *x) {
 		// TODO: escaping special characters
 		fprintf(stdout, "#\\%c", x->character.val);
 		break;
+/*
 	case TAG_STRING:
 		fprintf(stdout, "\"");
 		for(i = 0; i < x->string.len; i++) {
@@ -660,6 +672,7 @@ void scheme_display(struct Obj *x) {
 		}
 		fprintf(stdout, "\"");
 		break;
+*/
 	case TAG_NIL:
 		fprintf(stdout, "()");
 		break;
@@ -857,8 +870,7 @@ int scheme_is_self_evaluating(enum Tag tag) {
 		tag == TAG_TRUE ||
 		tag == TAG_EOF ||
 		tag == TAG_NUMBER ||
-		tag == TAG_CHARACTER ||
-		tag == TAG_STRING;
+		tag == TAG_CHARACTER;
 }
 
 struct Obj scheme_make_begin(struct Obj *lst) {
@@ -1216,7 +1228,6 @@ DEFINE_TYPE_PREDICATE_BUILTIN(eof_objectp, TAG_EOF)
 DEFINE_TYPE_PREDICATE_BUILTIN(symbolp, TAG_SYMBOL)
 DEFINE_TYPE_PREDICATE_BUILTIN(numberp, TAG_NUMBER)
 DEFINE_TYPE_PREDICATE_BUILTIN(charp, TAG_CHARACTER)
-DEFINE_TYPE_PREDICATE_BUILTIN(stringp, TAG_STRING)
 DEFINE_TYPE_PREDICATE_BUILTIN(nullp, TAG_NIL)
 DEFINE_TYPE_PREDICATE_BUILTIN(pairp, TAG_CONS)
 struct Obj scheme_builtin_booleanp(struct Obj *args) { \
@@ -1271,7 +1282,6 @@ void scheme_builtins_init(void) {
 	BUILTIN_(symbolp, "symbol?", 1);
 	BUILTIN_(numberp, "number?", 1);
 	BUILTIN_(charp, "char?", 1);
-	BUILTIN_(stringp, "string?", 1);
 	BUILTIN_(nullp, "null?", 1);
 	BUILTIN_(pairp, "pair?", 1);
 	BUILTIN_(booleanp, "boolean?", 1);

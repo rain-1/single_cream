@@ -127,3 +127,11 @@
   (if (null? list)
       list
       (insert-by < (car list) (sort-by < (cdr list)))))
+
+
+;;;; STRING
+
+(define (string? s)
+  (if (pair? s)
+      (char? (car s))
+      #f))
