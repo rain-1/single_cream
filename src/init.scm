@@ -67,6 +67,13 @@
       (cons (f (car l))
             (map f (cdr l)))))
 
+(define (for-each f l)
+  (if (null? l)
+      #f
+      (begin
+	(f (car l))
+        (for-each f (cdr l)))))
+
 (define (append x y)
   (if (null? x)
       y
@@ -149,3 +156,5 @@
   (if (pair? s)
       (char? (car s))
       #f))
+
+(define (display-string str) (for-each display-char str))

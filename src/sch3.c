@@ -1249,6 +1249,12 @@ DEFINE_ARITH_COMPARE_BUILTIN(gt, >);
 DEFINE_ARITH_COMPARE_BUILTIN(le, <=);
 DEFINE_ARITH_COMPARE_BUILTIN(ge, >=);
 
+struct Obj scheme_builtin_display_char(struct Obj *args) {
+	assert(args[0].tag == TAG_CHARACTER);
+	printf("%c", args[0].character.val);
+	return const_nil;
+}
+
 void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
 	scheme_root_push(&tmp);
@@ -1292,7 +1298,9 @@ void scheme_builtins_init(void) {
 	BUILTIN_(gt, ">", 2);
 	BUILTIN_(le, "<=", 2);
 	BUILTIN_(ge, ">=", 2);
-
+	
+	BUILTIN_(display_char, "display-char", 1);
+	
 	scheme_root_pop();
 	scheme_root_pop();
 }
