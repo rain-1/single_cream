@@ -323,8 +323,8 @@ char *scheme_symbol_name(int id) {
  * SECTION reader
  */
 
-void scheme_build_string(struct Obj *rt, char *str);
 void scheme_read_many(struct Obj *rt, int *line_no);
+void scheme_build_string(struct Obj *rt, char *str);
 
 //#define DEBUG
 #ifdef DEBUG
@@ -515,21 +515,6 @@ LBL(read_shorthand)
 	return;
 }
 
-void scheme_build_string(struct Obj *rt, char *str) {
-	int i;
-	
-	struct Obj rt_1;
-	
-	for(i = strlen(str); i >= 0; i--) {
-		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .character.val = str[i] };
-		*rt = scheme_cons(&rt_1, rt);
-	}
-	
-	*rt = scheme_cons(rt, NULL);
-	*rt = scheme_cons(NULL, rt);
-	*rt->cons.car = sym_quote;
-}
-
 void scheme_read_many(struct Obj *rt, int *line_no) {
 	int c;
 	
@@ -571,6 +556,21 @@ LBL(read_many_finish)
 		fprintf(stderr, "scheme_read_many: error multiple items after dot on line %d.\n", *line_no);
 		exit(1);
 	}
+}
+
+void scheme_build_string(struct Obj *rt, char *str) {
+	int i;
+	
+	struct Obj rt_1;
+	
+	for(i = strlen(str); i >= 0; i--) {
+		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .character.val = str[i] };
+		*rt = scheme_cons(&rt_1, rt);
+	}
+	
+	*rt = scheme_cons(rt, NULL);
+	*rt = scheme_cons(NULL, rt);
+	*rt->cons.car = sym_quote;
 }
 
 
