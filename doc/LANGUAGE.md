@@ -61,7 +61,10 @@ cons car cdr set-car! set-cdr!
 + - * quotient remainder
 eof-object? symbol? number? char? string? null? pair? boolean? procedure?
 < > <= >=
+display-char
 ```
+
+There are also a batch of standard library functions (like `length` and `map`) provided in `src/init.scm`.
 
 # Caveats
 
