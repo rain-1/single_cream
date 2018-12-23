@@ -1,0 +1,5 @@
+(if 1 (if 2 (if 3 (if 4 #t #f) #f) #f) #f)
+(if 1 #t (if 2 #t (if 3 #t (if 4 #t #f))))
+(if (if x #t (if y #t #f)) (if (if u #t (if v #t #f)) #t #f) #f)
+(if (if x (if y #t #f) #f) #t (if (if u (if v #t #f) #f) #t #f))
+(+ 1 ((lambda (x y) (* x y)) 3 5))
