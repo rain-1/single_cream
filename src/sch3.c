@@ -133,10 +133,15 @@ void scheme_root_delete(struct Root *rt) {
 	if(rt->free) free(rt);
 }
 
-void scheme_root_push(struct Obj *obj) {
+void scheme_root_push_value(struct Obj *obj) {
 	assert(gc_root_stack_height < ROOTSTACK_SIZE);
 	gc_root_stack[gc_root_stack_height] = obj;
 	gc_root_stack_height++;
+}
+
+void scheme_root_push(struct Obj *obj) {
+	*obj = const_nil;
+	scheme_root_push_value(obj);
 }
 
 void scheme_root_pop() {
@@ -956,7 +961,7 @@ eval:
 		// (begin <exp> ...)
 		
 		scheme_root_push(&t1);
-		scheme_root_push(env);
+//		scheme_root_push(env);
 loop_begin:
 		*exp = *exp->cons.cdr;
 		assert(exp->tag == TAG_CONS);
@@ -967,7 +972,7 @@ loop_begin:
 			// so do not recursively call eval
 			*exp = t1;
 			scheme_root_pop();
-			scheme_root_pop();
+//			scheme_root_pop();
 			goto eval;
 		}
 		else {
@@ -1050,7 +1055,7 @@ loop_begin:
 	}
 	else if(f.tag == TAG_BUILTIN) {
 		for(i = 0; i < f.builtin.n_args; i++) {
-			scheme_root_push(&args[i]);
+			scheme_root_push_value(&args[i]);
 			if(vals.tag != TAG_CONS) {
 				fprintf(stderr, "scheme_eval: too few args when calling builtin.\n");
 				exit(1);
