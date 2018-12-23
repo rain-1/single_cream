@@ -13,7 +13,6 @@
 (begin 
   (for-each print (combs-with-rep 2 (cons "iced" (cons "jam" (cons "plain" '())))))
   (newline)
-  (display (length (combs-with-rep 3 '(1 2 3 4 5 6 7 8 9 10))))
+  (display (length (combs-with-rep 3 '(1 2 3 4 5 6 7 8 9))))
   (newline)
   #f)
-

@@ -44,7 +44,7 @@ test: sch3
 	./tests/tests t/simple "$(RUN_SCRIPT) {}"
 	./tests/tests t/mal "$(RUN_SCRIPT) {}"
 	./tests/tests t/rosetta "$(RUN_SCRIPT) {}"
-	./tests/tests t/preprocessor "$(RUN_SCRIPT) {}"
+	./tests/tests t/scheme-tests "$(RUN_SCRIPT) {}"
 
 analyze:
 	echo '##' PERFORMING SCAN BUILD

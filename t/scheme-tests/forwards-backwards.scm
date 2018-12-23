@@ -1,0 +1,25 @@
+(define (forward-backwards l-r k)
+  (k l-r (reverse l-r)))
+
+(define (foo l r n)
+  (if (= 0 n)
+      (print-numbers (append l r) 0)
+      (forward-backwards
+       (append l r)
+       (lambda (fwd bwd)
+         (begin (for-each (lambda (c) (for-each display-string c)) fwd)
+                (newline)
+                (foo (map (lambda (c) (cons "0" c)) fwd)
+                     (map (lambda (c) (cons "1" c)) bwd)
+                     (- n 1)))))))
+
+(define (print-numbers l n)
+  (if (null? l)
+      '()
+      (begin (display n)
+             (display-string ": ")
+             (for-each display-string (car l))
+             (newline)
+             (print-numbers (cdr l) (+ n 1)))))
+
+(foo (cons (cons "0" '()) '()) (cons (cons "1" '()) '()) 4)
