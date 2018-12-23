@@ -20,12 +20,14 @@ git submodule update
 
 * `make` to build it.
 * `make test` to run the test suite.
-* `make analyze` to run analyzers (clang-analyze, valgrind)
-* `make clean ; make CC=tcc` to build it with tinycc.
-* `make clean ; make CC=clang CFLAGS='-fsanitize=address'`.
+* `make analyze` to run analyzers (clang-analyze, [cppcheck](https://github.com/danmar/cppcheck), valgrind)
 * `./util/run.sh <filename.scm>` to run a script file.
-* `./util/run-valgrind.sh <filename.scm>` to run a script file with the interpreter being analyzed by valgrind.
 * `./util/repl.sh` to try out expressions in the REPL. Uses rlwrap.
+* `./util/run-valgrind.sh <filename.scm>` to run a script file with the interpreter being analyzed by valgrind.
+
+## Building
+
+You may need to use this special command to build cppcheck: `make SRCDIR=build CFGDIR=\`pwd\`/cfg HAVE_RULES=yes CXXFLAGS="-O2 -DNDEBUG -Wall -Wno-sign-compare -Wno-unused-function`
 
 # Tests
 

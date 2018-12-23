@@ -50,10 +50,8 @@ analyze:
 	make clean
 	scan-build make
 	
-	echo '##' BUILDING WITH SANITIZE ADDRESS
-	make clean
-	make CC=clang CFLAGS='-fsanitize=address'
-	make test
+	echo '##' PERFORMING CPPCHECK
+	cppcheck --enable=all ./src/sch3.c
 	
 	echo '##' RUNNING WITH VALGRIND
 	make clean
@@ -63,4 +61,15 @@ analyze:
 	echo '##' BUILDING WITH TCC
 	make clean
 	make CC=tcc
+	make test
+
+	echo '##' BUILDING WITH SANITIZE ADDRESS, MEMORY, UNDEFINED
+	make clean
+	make CC=clang CFLAGS='-fsanitize=address'
+	make test
+	make clean
+	make CC=clang CFLAGS='-fsanitize=memory'
+	make test
+	make clean
+	make CC=clang CFLAGS='-fsanitize=undefined'
 	make test
