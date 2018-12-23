@@ -266,7 +266,8 @@ int symbol_table_size = 0;
 	DO_SYMBOL(define) \
 	DO_SYMBOL(lambda) \
 	DO_SYMBOL(if) \
-	DO_SYMBOL(begin)
+	DO_SYMBOL(begin) \
+	DO_SYMBOL(preprocess)
 
 #define DO_SYMBOL(name) struct Obj sym_ ## name;
 DO_SYMBOLS
@@ -1139,7 +1140,7 @@ struct Obj scheme_curry_definition(struct Obj *exp) {
 	return t3;
 }
 
-struct Obj scheme_exec(struct Obj *exp, struct Obj *env) {
+struct Obj scheme_exec(struct Obj *exp, struct Obj *env, int display_result) {
 	struct Obj t1, t2;
 	struct Obj res;
 	
@@ -1172,8 +1173,11 @@ define_loop:
 	}
 	
 	res = scheme_eval(exp, env);
-	scheme_display(&res);
-	puts("");
+	
+	if(display_result) {
+		scheme_display(&res);
+		puts("");
+	}
 
 	return res;
 }
@@ -1182,6 +1186,10 @@ define_loop:
 /*
  * SECTION builtins
  */
+
+struct Obj scheme_builtin_preprocess(struct Obj *args) {
+	return args[0];
+}
 
 struct Obj scheme_builtin_display(struct Obj *args) {
 	scheme_display(&args[0]);
@@ -1283,6 +1291,8 @@ void scheme_builtins_init(void) {
 		globals->obj = scheme_cons(&tmp, &globals->obj); \
 	} while(0)
 
+	BUILTIN(preprocess, 1);
+
 	BUILTIN(display, 1);
 	BUILTIN(newline, 0);
 	BUILTIN_(eq, "eq?", 2);
@@ -1324,6 +1334,18 @@ void scheme_builtins_init(void) {
  * SECTION main
  */
 
+void wrap_preprocess(struct Obj *rt) {
+	// TODO: tidy
+	
+	*rt = scheme_cons(rt, NULL);
+	*rt = scheme_cons(NULL, rt);
+	*rt->cons.car = sym_quote;
+	
+	*rt = scheme_cons(rt, NULL);
+	*rt = scheme_cons(NULL, rt);
+	*rt->cons.car = sym_preprocess;
+}
+
 int main(int argc, char **argv) {
 	struct Root *rt, *rt2, *res;
 	int line_no = 0;
@@ -1337,13 +1359,32 @@ int main(int argc, char **argv) {
 		
 		if(rt->obj.tag == TAG_EOF)
 			break;
-
+		
+		wrap_preprocess(&rt->obj);
+		
 		rt2->obj = const_nil;
-		res->obj = scheme_exec(&rt->obj, &rt2->obj);
+		rt->obj = scheme_exec(&rt->obj, &rt2->obj, 0);
+		
+		rt2->obj = const_nil;
+		res->obj = scheme_exec(&rt->obj, &rt2->obj, 1);
+		
 		res->obj = const_nil;
 		scheme_gc();
 	} while(1);
 	return 0;
 }
 
+// - basic REPL:
+// we have read in an exp
+// then we execute exp
 
+// - macro expander REPL:
+// we have read in an exp
+// now we want to do exp = preprocess exp
+// then we execute exp
+
+// for this we need to use eval
+// struct Obj scheme_eval(struct Obj *exp_in, struct Obj *env_in) {
+// so change exp to (preprocess 'exp)
+// = cons(sym_preprocess, cons(sym_quote, cons(exp, const_nil)))
+// call this wrap_preprocess
