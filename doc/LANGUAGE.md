@@ -11,7 +11,7 @@ We currently have the following data types
 * symbols: `foo`, `bar`, `quux`
 * numbers: `33`, `-524` (only integers)
 * characters: `#\x`, `#\(`
-* strings: "hello world!"
+* strings: `"hello world!"`
 * nil: `()`
 * cons: `(_ . _)`
 * the EOF object (for detecting the end of a file)
@@ -63,3 +63,6 @@ eof-object? symbol? number? char? string? null? pair? boolean? procedure?
 < > <= >=
 ```
 
+# Caveats
+
+As a hack to reduce implementation effort strings are implemented as quoted lists of characters. One consequence of this is "double quoting" in situations like `'("foo" "bar" "baz")` ends up as `'('(cons #\f ...`. This could be fixed by adding a flag to the reader for INSIDE_QUOTE but I chose to just work around the problem for now.
