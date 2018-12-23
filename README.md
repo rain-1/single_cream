@@ -7,6 +7,7 @@ The aims of this project are:
 * Implement a mini scheme language useful for bootstrapping a self hosted scheme implementation.
 * Have proper tail calls designed in from the beginning.
 * Have a working GC, so we can process decent sized inputs.
+* Basic macro system for syntactic extension.
 
 # Usage
 
@@ -28,5 +29,4 @@ It's very useful to have a comprehensive set of tests. Our tests are divided int
 * `t/trivial`: Extremely simple tests, checking that various objects can be READ and printed back.
 * `t/simple`: Basic functionality tests for primitive functions. Also used to make sure simple recursive functions and such work before adding them to `init.scm`.
 * `t/mal`: Taken some tests for the 'make a lisp' project.
-
-
+* `t/rosetta`: Problems and solutions taken from the rosettacode code comparison site.
