@@ -158,3 +158,5 @@
       #f))
 
 (define (display-string str) (for-each display-char str))
+(define (print-string str) (display-string str) (newline))
+
