@@ -18,6 +18,7 @@
 VPATH = bin
 CC=gcc
 CFLAGS=-D_GNU_SOURCE -O0 -std=c99 -ggdb -Wall -Werror -Wno-unused-variable
+RUN_SCRIPT=./util/run.sh
 
 all: sch3
 
@@ -38,8 +39,28 @@ install: sch3
 	cp $^ $(bindir)
 
 .PHONY: test
-test:
-	./tests/tests t/trivial './util/run.sh {}'
-	./tests/tests t/simple './util/run.sh {}'
-	./tests/tests t/mal './util/run.sh {}'
-	./tests/tests t/rosetta './util/run.sh {}'
+test: sch3
+	./tests/tests t/trivial "$(RUN_SCRIPT) {}"
+	./tests/tests t/simple "$(RUN_SCRIPT) {}"
+	./tests/tests t/mal "$(RUN_SCRIPT) {}"
+	./tests/tests t/rosetta "$(RUN_SCRIPT) {}"
+
+analyze:
+	echo '##' PERFORMING SCAN BUILD
+	make clean
+	scan-build make
+	
+	echo '##' BUILDING WITH SANITIZE ADDRESS
+	make clean
+	make CC=clang CFLAGS='-fsanitize=address'
+	make test
+	
+	echo '##' RUNNING WITH VALGRIND
+	make clean
+	make
+	make test RUN_SCRIPT=./util/run-valgrind.sh
+	
+	echo '##' BUILDING WITH TCC
+	make clean
+	make CC=tcc
+	make test

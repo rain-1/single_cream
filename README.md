@@ -18,8 +18,13 @@ git submodule init
 git submodule update
 ```
 
-* `make` to build everything.
+* `make` to build it.
+* `make test` to run the test suite.
+* `make analyze` to run analyzers (clang-analyze, valgrind)
+* `make clean ; make CC=tcc` to build it with tinycc.
+* `make clean ; make CC=clang CFLAGS='-fsanitize=address'`.
 * `./util/run.sh <filename.scm>` to run a script file.
+* `./util/run-valgrind.sh <filename.scm>` to run a script file with the interpreter being analyzed by valgrind.
 * `./util/repl.sh` to try out expressions in the REPL. Uses rlwrap.
 
 # Tests

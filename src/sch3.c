@@ -391,7 +391,8 @@ void scheme_read_atom(struct Obj *rt, int *line_no) {
 	int c;
 	int negative = 0;
 
-	char buf[64];
+#define ATOM_BUFLIMIT 256
+	char buf[ATOM_BUFLIMIT];
 	int buflen = 0;
 	buf[buflen] = '\0';
 
@@ -446,6 +447,10 @@ LBL(read_atom_string)
 	if(c == '\\') {
 		GETCHAR(c, stdin);
 	}
+	if(buflen >= ATOM_BUFLIMIT) {
+		fprintf(stderr, "scheme_read_atom: token longer than buffer\n");
+		exit(1);
+	}
 	buf[buflen++] = c;
 	buf[buflen] = '\0';
 	goto read_atom_string;
@@ -467,6 +472,10 @@ LBL(read_buf)
 			*rt = scheme_symbol_intern(buf);
 			return;
 		}
+	}
+	if(buflen >= ATOM_BUFLIMIT) {
+		fprintf(stderr, "scheme_read_atom: token longer than buffer\n");
+		exit(1);
 	}
 	buf[buflen++] = c;
 	buf[buflen] = '\0';
