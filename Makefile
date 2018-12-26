@@ -51,8 +51,8 @@ analyze:
 	make clean
 	scan-build make
 	
-	echo '##' PERFORMING CPPCHECK
-	cppcheck --enable=all ./src/sch3.c
+#	echo '##' PERFORMING CPPCHECK
+#	cppcheck --enable=all ./src/sch3.c
 	
 	echo '##' RUNNING WITH VALGRIND
 	make clean
