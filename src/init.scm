@@ -151,7 +151,6 @@
 
 
 ;;;; STRING
-
 (define (string? s)
   (if (pair? s)
       (char? (car s))
@@ -160,3 +159,8 @@
 (define (display-string str) (for-each display-char str))
 (define (print-string str) (display-string str) (newline))
 
+
+;;;; BOXES
+(define (box val) (cons 'box val))
+(define (unbox b) (cdr b))
+(define (set-box! b v) (set-cdr! b v) b)

@@ -1,0 +1,11 @@
+table
+
+table
+(foo . 55)
+
+table
+(baz . 11)
+(bar . 66)
+(foo . 33)
+
+()
