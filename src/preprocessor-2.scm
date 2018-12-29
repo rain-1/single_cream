@@ -38,11 +38,39 @@
    (map cadr (car exps))
    (cdr exps)))
 
+(define (unquote? exp)
+  (if (pair? exp)
+      (eq? 'unquote (car exp))
+      #f))
+
+(define (make-cons a b)
+  (cons 'cons (cons a (cons b '()))))
+
+(define (make-quote a)
+  (cons 'quote (cons a '())))
+
+(define (expand-quasiquote/start exps)
+  (if (if (pair? exps)
+	  (null? (cdr exps))
+	  #f)
+      (expand-quasiquote (car exps))
+      (error 'bad-quasiquote)))
+
+(define (expand-quasiquote exp)
+  ;; TODO: levels
+  (if (unquote? exp)
+      (cadr exp)
+      (if (pair? exp)
+	  (make-cons (expand-quasiquote (car exp))
+		     (expand-quasiquote (cdr exp)))
+	  (make-quote exp))))
+
 (define _ ;; used to do work without printing the result to stdout
   (begin
-    (add-macro! 'and expand-and)
-    (add-macro! 'or expand-or)
-    (add-macro! 'let expand-let)
+    (add-macro! 'and (compose expand-and cdr))
+    (add-macro! 'or (compose expand-or cdr))
+    (add-macro! 'let (compose expand-let cdr))
+    (add-macro! 'quasiquote (compose expand-quasiquote/start cdr))
     #f))
 
 ;;;;
@@ -61,7 +89,7 @@
 					      (cddr s)))
 	      ((lambda (m-entry)
 		 (if m-entry
-		     (preprocess/helper shadow ((cdr m-entry) (cdr s)))
+		     (preprocess/helper shadow ((cdr m-entry) s))
 		     (cons (preprocess/helper shadow (car s))
 			   (preprocess/helper shadow (cdr s)))))
 	       (assoc (car s) (unbox macro-table)))))
@@ -72,3 +100,37 @@
 
 (define (preprocess s)
   (preprocess/helper '() s))
+
+;;;;;
+
+(define (expand-defmacro exps)
+  (let ((name (cadr exps))
+	(expander (caddr exps)))
+    `(define _
+       (begin
+	 (add-macro! ',name ,expander)
+	 #f))))
+
+(define _
+  (begin
+    (add-macro! 'defmacro expand-defmacro)
+    #f))
+
+(defmacro list
+  (lambda (t) (fold (lambda (a c) `(cons ,a ,c)) ''() (cdr t))))
+
+(defmacro when
+  (lambda (exp)
+    (let ((test (cadr exp))
+	  (body `(begin . ,(cddr exp))))
+      `(if ,test
+	   ,body
+	   #f))))
+
+(defmacro unless
+  (lambda (exp)
+    (let ((test (cadr exp))
+	  (body `(begin . ,(cddr exp))))
+      `(if ,test
+	   #f
+	   ,body))))

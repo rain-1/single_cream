@@ -3,6 +3,8 @@
 (define = eq?)
 (define char=? =)
 
+(define (compose f g) (lambda (x) (f (g x))))
+
 ;; NUMBERS
 (define (zero? x) (= x 0))
 (define (even? x) (= 0 (modulo x 2)))

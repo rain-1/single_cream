@@ -1196,6 +1196,14 @@ struct Obj scheme_builtin_display(struct Obj *args) {
 	return const_nil;
 }
 
+struct Obj scheme_builtin_error(struct Obj *args) {
+	printf("Scheme Error: ");
+	scheme_display(&args[0]);
+	printf("\n");
+	exit(1);
+	return const_nil;
+}
+
 struct Obj scheme_builtin_newline(struct Obj *args) {
 	puts("");
 	return const_nil;
@@ -1295,6 +1303,7 @@ void scheme_builtins_init(void) {
 
 	BUILTIN(display, 1);
 	BUILTIN(newline, 0);
+	BUILTIN(error, 1);
 	BUILTIN_(eq, "eq?", 2);
 
 	BUILTIN(cons, 2);
