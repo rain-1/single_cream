@@ -29,7 +29,7 @@ git submodule update
 
 You may need to use this special command to build cppcheck: `make SRCDIR=build CFGDIR=\`pwd\`/cfg HAVE_RULES=yes CXXFLAGS="-O2 -DNDEBUG -Wall -Wno-sign-compare -Wno-unused-function`
 
-# Tests
+## Testing
 
 It's very useful to have a comprehensive set of tests. Our tests are divided into suites, feel free to make new ones and import tests from other places.
 
@@ -37,3 +37,6 @@ It's very useful to have a comprehensive set of tests. Our tests are divided int
 * `t/simple`: Basic functionality tests for primitive functions. Also used to make sure simple recursive functions and such work before adding them to `init.scm`.
 * `t/mal`: Taken some tests for the 'make a lisp' project.
 * `t/rosetta`: Problems and solutions taken from the rosettacode code comparison site.
+* `t/sicp`: Ideas taken from the SICP book. nqueens is a particularly powerful stressor.
+
+We have tested it with travis continuation integration, and on x64 linux and raspberry pi ARM linux.
