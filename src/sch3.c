@@ -46,11 +46,11 @@ struct Root {
 	struct Obj obj;
 };
 
-#define SEMISPACE_SIZE (1<<13)
+#define SEMISPACE_SIZE (1<<17)
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Root *gc_roots;
-#define ROOTSTACK_SIZE (1<<10)
+#define ROOTSTACK_SIZE (1<<16)
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
 
