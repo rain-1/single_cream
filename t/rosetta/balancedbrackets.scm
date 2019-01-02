@@ -1,5 +1,5 @@
 (define (balanced-brackets string)
-  (print (b string 0)))
+  (print (b (string->list string) 0)))
 
 (define (boolean-and b1 b2)
   (if b1

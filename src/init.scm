@@ -153,13 +153,11 @@
 
 
 ;;;; STRING
-(define (string? s)
-  (if (pair? s)
-      (char? (car s))
-      #f))
+(define (display-string s) (for-each display-char (string->list s)))
+(define (print-string s) (display-string s) (newline))
 
-(define (display-string str) (for-each display-char str))
-(define (print-string str) (display-string str) (newline))
+(define (string-length s) (length (string->list s)))
+(define (string-ref s i) (list-ref (string->list s) i))
 
 
 ;;;; BOXES

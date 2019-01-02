@@ -1,9 +1,6 @@
 ;(define (run-length-decode v)
 ;  (apply string-append (map (lambda (p) (make-string (car p) (cdr p))) v)))
 
-(define string-length length)
-(define string-ref list-ref)
-
 (define (run-length-encode s)
   ((lambda (n)
      (run-length-encode/loop s (- n 2) (string-ref s (- n 1)) 1 '()))

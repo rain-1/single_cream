@@ -18,6 +18,8 @@ enum Tag {
 	TAG_CONS	= 8,
 	TAG_CLOSURE	= 9,
 	TAG_BUILTIN	= 10,
+	TAG_STRING	= 11,
+	TAG_VECTOR	= 12,
 	
 	TAG_GC		= 0xFF,
 };
@@ -31,6 +33,8 @@ struct Obj {
 		struct { struct Obj *car, *cdr; } cons;
 		struct { struct Obj *args, *env, *body; } closure;
 		struct { int n_args; struct Obj (*impl)(struct Obj *args); } builtin;
+		struct { struct Obj *it; } string;
+		struct { struct Obj *it; } vector;
 		struct { struct Obj *fwd; } gc;
 	};
 };
@@ -217,6 +221,12 @@ void scheme_gc_forward(struct Obj *obj) {
 		obj->closure.args = scheme_gc_copy(obj->closure.args);
 		obj->closure.env = scheme_gc_copy(obj->closure.env);
 		obj->closure.body = scheme_gc_copy(obj->closure.body);
+		break;
+	case TAG_STRING:
+		obj->string.it = scheme_gc_copy(obj->string.it);
+		break;
+	case TAG_VECTOR:
+		obj->vector.it = scheme_gc_copy(obj->vector.it);
 		break;
 	case TAG_GC:
 		fprintf(stderr, "gc: error gc_forward\n");
@@ -584,9 +594,10 @@ void scheme_build_string(struct Obj *rt, char *str) {
 		*rt = scheme_cons(&rt_1, rt);
 	}
 	
-	*rt = scheme_cons(rt, NULL);
-	*rt = scheme_cons(NULL, rt);
-	*rt->cons.car = sym_quote;
+	// *rt is rooted so we can allocate here
+	rt_1 = (struct Obj){ .tag = TAG_STRING, .string.it = scheme_gc_alloc(1) };
+	*rt_1.string.it = *rt;
+	*rt = rt_1;
 }
 
 
@@ -640,6 +651,11 @@ int scheme_eq_internal(struct Obj *x, struct Obj *y) {
 			x->closure.body == y->closure.body &&
 			x->closure.env == y->closure.env;
 	
+	case TAG_STRING:
+		return x->string.it == y->string.it;
+	case TAG_VECTOR:
+		return x->vector.it == y->vector.it;
+	
 	case TAG_BUILTIN:
 		return x->builtin.n_args == y->builtin.n_args && x->builtin.impl == y->builtin.impl;
 
@@ -654,6 +670,7 @@ struct Obj scheme_eq(struct Obj *x, struct Obj *y) {
 
 void scheme_display(struct Obj *x) {
 	int i;
+	char c;
 
 	switch(x->tag) {
 	case TAG_TRUE:
@@ -675,20 +692,6 @@ void scheme_display(struct Obj *x) {
 		// TODO: escaping special characters
 		fprintf(stdout, "#\\%c", x->character.val);
 		break;
-/*
-	case TAG_STRING:
-		fprintf(stdout, "\"");
-		for(i = 0; i < x->string.len; i++) {
-			if(x->string.text[i] == '\\' || x->string.text[i] == '"') {
-				fprintf(stdout, "\\%c", x->string.text[i]);
-			}
-			else {
-				fprintf(stdout, "%c", x->string.text[i]);
-			}
-		}
-		fprintf(stdout, "\"");
-		break;
-*/
 	case TAG_NIL:
 		fprintf(stdout, "()");
 		break;
@@ -713,6 +716,26 @@ loop:
 		break;
 	case TAG_CLOSURE:
 		fprintf(stdout, "#<closure>");
+		break;
+	case TAG_STRING:
+		fprintf(stdout, "\"");
+		x = x->string.it;
+		while(x->tag == TAG_CONS) {
+			assert(x->cons.car->tag == TAG_CHARACTER);
+			c = x->cons.car->character.val;
+			x = x->cons.cdr;
+			if(c == '\\' || c == '"') {
+				fprintf(stdout, "\\%c", c);
+			}
+			else {
+				fprintf(stdout, "%c", c);
+			}
+		}
+		fprintf(stdout, "\"");
+		break;
+	case TAG_VECTOR:
+		fprintf(stdout, "#");
+		scheme_display(x->vector.it);
 		break;
 	case TAG_BUILTIN:
 		fprintf(stdout, "#<builtin>");
@@ -886,7 +909,9 @@ int scheme_is_self_evaluating(enum Tag tag) {
 		tag == TAG_TRUE ||
 		tag == TAG_EOF ||
 		tag == TAG_NUMBER ||
-		tag == TAG_CHARACTER;
+		tag == TAG_CHARACTER ||
+		tag == TAG_STRING ||
+		tag == TAG_VECTOR;
 }
 
 struct Obj scheme_make_begin(struct Obj *lst) {
@@ -1261,6 +1286,8 @@ DEFINE_TYPE_PREDICATE_BUILTIN(numberp, TAG_NUMBER)
 DEFINE_TYPE_PREDICATE_BUILTIN(charp, TAG_CHARACTER)
 DEFINE_TYPE_PREDICATE_BUILTIN(nullp, TAG_NIL)
 DEFINE_TYPE_PREDICATE_BUILTIN(pairp, TAG_CONS)
+DEFINE_TYPE_PREDICATE_BUILTIN(stringp, TAG_STRING)
+DEFINE_TYPE_PREDICATE_BUILTIN(vectorp, TAG_VECTOR)
 struct Obj scheme_builtin_booleanp(struct Obj *args) { \
 	return (args[0].tag == TAG_TRUE || args[0].tag == TAG_FALSE) ? const_true : const_false; \
 }
@@ -1283,6 +1310,28 @@ struct Obj scheme_builtin_display_char(struct Obj *args) {
 	assert(args[0].tag == TAG_CHARACTER);
 	printf("%c", args[0].character.val);
 	return const_nil;
+}
+
+struct Obj scheme_builtin_string_to_list(struct Obj *args) {
+	assert(args[0].tag == TAG_STRING);
+	return *args[0].string.it;
+}
+
+struct Obj scheme_builtin_vector_to_list(struct Obj *args) {
+	assert(args[0].tag == TAG_VECTOR);
+	return *args[0].vector.it;
+}
+
+struct Obj scheme_builtin_list_to_string(struct Obj *args) {
+	struct Obj s  = (struct Obj){ .tag = TAG_STRING, .string.it = scheme_gc_alloc(1) };
+	*s.string.it = args[0];
+	return s;
+}
+
+struct Obj scheme_builtin_list_to_vector(struct Obj *args) {
+	struct Obj s  = (struct Obj){ .tag = TAG_VECTOR, .string.it = scheme_gc_alloc(1) };
+	*s.string.it = args[0];
+	return s;
 }
 
 void scheme_builtins_init(void) {
@@ -1326,6 +1375,8 @@ void scheme_builtins_init(void) {
 	BUILTIN_(pairp, "pair?", 1);
 	BUILTIN_(booleanp, "boolean?", 1);
 	BUILTIN_(procedurep, "procedure?", 1);
+	BUILTIN_(stringp, "string?", 1);
+	BUILTIN_(vectorp, "vector?", 1);
 
 	BUILTIN_(lt, "<", 2);
 	BUILTIN_(gt, ">", 2);
@@ -1333,6 +1384,11 @@ void scheme_builtins_init(void) {
 	BUILTIN_(ge, ">=", 2);
 	
 	BUILTIN_(display_char, "display-char", 1);
+	
+	BUILTIN_(string_to_list, "string->list", 1);
+	BUILTIN_(list_to_string, "list->string", 1);
+	BUILTIN_(vector_to_list, "vector->list", 1);
+	BUILTIN_(list_to_vector, "list->vector", 1);
 	
 	scheme_root_pop();
 	scheme_root_pop();

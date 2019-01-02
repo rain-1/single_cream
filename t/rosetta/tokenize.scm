@@ -2,10 +2,9 @@
   (if (null? lst)
       (if (null? acc)
           '()
-          (cons (reverse acc) '()))
+          (cons (list->string (reverse acc)) '()))
       (if (eq? sep (car lst))
-          (cons (reverse acc) (tokenize (cdr lst) sep '()))
+          (cons (list->string (reverse acc)) (tokenize (cdr lst) sep '()))
           (tokenize (cdr lst) sep (cons (car lst) acc)))))
 
-(for-each print-string (tokenize "Hello,How,Are,You,Today" #\, '()))
-
+(for-each print (tokenize (string->list "Hello,How,Are,You,Today") #\, '()))
