@@ -1229,6 +1229,13 @@ struct Obj scheme_builtin_error(struct Obj *args) {
 	return const_nil;
 }
 
+struct Obj scheme_builtin_gensym(struct Obj *args) {
+	char name[64];
+	assert(args[0].tag == TAG_SYMBOL);
+	sprintf(name, "gensym-%s-%ld", scheme_symbol_name(args[0].symbol.id), random()%99999);
+	return scheme_symbol_intern(name);
+}
+
 struct Obj scheme_builtin_newline(struct Obj *args) {
 	puts("");
 	return const_nil;
@@ -1353,6 +1360,7 @@ void scheme_builtins_init(void) {
 	BUILTIN(display, 1);
 	BUILTIN(newline, 0);
 	BUILTIN(error, 1);
+	BUILTIN(gensym, 1);
 	BUILTIN_(eq, "eq?", 2);
 
 	BUILTIN(cons, 2);
