@@ -1,0 +1,3 @@
+(() (2) (1) (1 2))
+(() (c) (b) (b c) (a) (a c) (a b) (a b c))
+(() (w) (z) (z w) (y) (y w) (y z) (y z w) (x) (x w) (x z) (x z w) (x y) (x y w) (x y z) (x y z w))
