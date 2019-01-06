@@ -1,0 +1,15 @@
+(define (let-loop-fib n)
+  (let loop ((i 1) (j 1) (n n))
+    (if (= n 0) i (loop j (+ i j) (- n 1)))))
+
+(let-loop-fib 1)
+(let-loop-fib 2)
+(let-loop-fib 3)
+(let-loop-fib 4)
+(let-loop-fib 5)
+(let-loop-fib 6)
+(let-loop-fib 7)
+(let-loop-fib 8)
+(let-loop-fib 9)
+(let-loop-fib 10)
+

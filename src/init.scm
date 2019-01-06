@@ -7,6 +7,7 @@
 
 ;; NUMBERS
 (define (zero? x) (= x 0))
+(define modulo remainder)
 (define (even? x) (= 0 (modulo x 2)))
 (define (odd? x) (not (even? x)))
 (define (positive? x) (> x 0))
@@ -164,3 +165,4 @@
 (define (box val) (cons 'box val))
 (define (unbox b) (cdr b))
 (define (set-box! b v) (set-cdr! b v) b)
+

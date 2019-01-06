@@ -1,0 +1,8 @@
+(((_. 0) where))
+()
+((3 where))
+((a where) (b where) (c where))
+((a where) (c where))
+(((b a) where) ((b a) where) ((c b) where))
+(((() (a b c)) where) (((a) (b c)) where) (((a b) (c)) where) (((a b c) ()) where))
+((((1) (0 1 1 1 1)) where) (((0 1 1 1 1) (1)) where) (((0 1) (1 1 1 1)) where) (((1 1 1 1) (0 1)) where) (((0 1 1) (1 0 1)) where) (((0 1 0 1) (1 1)) where) (((1 0 1) (0 1 1)) where) (((1 1) (0 1 0 1)) where))

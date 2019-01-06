@@ -135,6 +135,36 @@
 	   #f
 	   ,body))))
 
+;; redefine LET to support named let, using the Y combinator
+
+(define (y/n n f)
+  (let ((g (gensym 'g)))
+    (if (= n 1)
+	`((lambda (,g) (,g ,g))
+	  (lambda (,g)
+	    (,f (lambda (a) ((,g ,g) a)))))
+	(if (= n 2)
+	    `((lambda (,g) (,g ,g))
+	      (lambda (,g)
+		(,f (lambda (a b) ((,g ,g) a b)))))
+	    (if (= n 3)
+		`((lambda (,g) (,g ,g))
+		  (lambda (,g)
+		    (,f (lambda (a b c) ((,g ,g) a b c)))))
+		(error 'no-y-combinator))))))
+
+(define (expand-named-let loop vars vals body)
+  `(,(y/n (length vars)
+	  `(lambda (,loop)
+	     (lambda ,vars . ,body)))
+    . ,vals))
+
+(defmacro let
+  (lambda (exp)
+    (if (symbol? (cadr exp))
+	(expand-named-let (cadr exp) (map car (caddr exp)) (map cadr (caddr exp)) (cdddr exp))
+	(expand-let (cdr exp)))))
+
 ;;; COND
 
 (define (cond/0? exp)

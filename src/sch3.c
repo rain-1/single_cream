@@ -54,7 +54,7 @@ struct Root *gc_roots;
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
 
-#define MAX_SYMBOLS (1<<8)
+#define MAX_SYMBOLS (1<<10)
 char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
@@ -1078,7 +1078,7 @@ loop_begin:
 	
 	f = *exp->cons.car;
 	vals = *exp->cons.cdr;
-	
+
 	f = scheme_eval(&f, env);
 	vals = scheme_evlist(&vals, env);
 	
