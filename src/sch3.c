@@ -1446,18 +1446,3 @@ int main(int argc, char **argv) {
 	} while(1);
 	return 0;
 }
-
-// - basic REPL:
-// we have read in an exp
-// then we execute exp
-
-// - macro expander REPL:
-// we have read in an exp
-// now we want to do exp = preprocess exp
-// then we execute exp
-
-// for this we need to use eval
-// struct Obj scheme_eval(struct Obj *exp_in, struct Obj *env_in) {
-// so change exp to (preprocess 'exp)
-// = cons(sym_preprocess, cons(sym_quote, cons(exp, const_nil)))
-// call this wrap_preprocess
