@@ -65,7 +65,3 @@ display-char
 ```
 
 There are also a batch of standard library functions (like `length` and `map`) provided in `src/init.scm`.
-
-# Caveats
-
-As a hack to reduce implementation effort strings are implemented as quoted lists of characters. One consequence of this is "double quoting" in situations like `'("foo" "bar" "baz")` ends up as `'('(cons #\f ...`. This could be fixed by adding a flag to the reader for INSIDE_QUOTE but I chose to just work around the problem for now.
