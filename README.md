@@ -27,10 +27,6 @@ git submodule update
 * `./util/repl.sh` to try out expressions in the REPL. Uses rlwrap.
 * `./util/run-valgrind.sh <filename.scm>` to run a script file with the interpreter being analyzed by valgrind.
 
-## Building
-
-You may need to use this special command to build cppcheck: `make SRCDIR=build CFGDIR=\`pwd\`/cfg HAVE_RULES=yes CXXFLAGS="-O2 -DNDEBUG -Wall -Wno-sign-compare -Wno-unused-function`
-
 ## Testing
 
 It's very useful to have a comprehensive set of tests. Our tests are divided into suites, feel free to make new ones and import tests from other places.
