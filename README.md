@@ -27,6 +27,12 @@ git submodule update
 * `./util/repl.sh` to try out expressions in the REPL. Uses rlwrap.
 * `./util/run-valgrind.sh <filename.scm>` to run a script file with the interpreter being analyzed by valgrind.
 
+For building and testing on nixos you can use the following shell:
+
+```
+nix-shell -p autoreconfHook -p clang -p clangAnalyzer -p valgrind -p tinycc
+````
+
 ## Testing
 
 It's very useful to have a comprehensive set of tests. Our tests are divided into suites, feel free to make new ones and import tests from other places.

@@ -1230,9 +1230,12 @@ struct Obj scheme_builtin_error(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_gensym(struct Obj *args) {
-	char name[64];
+	char name[64] = { 0 };
 	assert(args[0].tag == TAG_SYMBOL);
-	sprintf(name, "gensym-%s-%ld", scheme_symbol_name(args[0].symbol.id), random()%99999);
+	if(sprintf(name, "gensym-%s-%ld", scheme_symbol_name(args[0].symbol.id), random()%99999) <= 0) {
+		fprintf(stderr, "scheme_builtin_gensym: sprintf failed");
+		exit(1);
+	}
 	return scheme_symbol_intern(name);
 }
 

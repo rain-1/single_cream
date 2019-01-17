@@ -70,7 +70,7 @@ analyze:
 	make CC=clang CFLAGS='-fsanitize=address'
 	make test
 	make clean
-	make CC=clang CFLAGS='-fsanitize=memory'
+	make CC=clang CFLAGS='-fsanitize=memory -fsanitize-memory-track-origins'
 	make test
 	make clean
 	make CC=clang CFLAGS='-fsanitize=undefined'
