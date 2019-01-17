@@ -39,17 +39,9 @@ struct Obj {
 	};
 };
 
-struct Root {
-	int free;
-	struct Root *prev;
-	struct Root *next;
-	struct Obj obj;
-};
-
 #define SEMISPACE_SIZE (1<<17)
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
-struct Root *gc_roots;
 #define ROOTSTACK_SIZE (1<<16)
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
@@ -63,17 +55,17 @@ char **symbol_table;
 // GC_OFF = 0 -> on
 #define GC_OFF 0
 
-struct Root *globals;
+struct Obj globals;
 
 void scheme_init(void);
-
-void scheme_root_setup(struct Root *);
-struct Root *scheme_root_alloc(void);
-void scheme_root_delete(struct Root *rt);
 
 void scheme_gc_init(void);
 struct Obj *scheme_gc_alloc(int cells);
 void scheme_gc(void);
+
+void scheme_root_push_value(struct Obj *obj);
+void scheme_root_push(struct Obj *obj);
+void scheme_root_pop();
 
 void scheme_symbol_init(void);
 struct Obj scheme_symbol_intern(char *name);
@@ -99,7 +91,7 @@ void scheme_init(void) {
 	const_eof = (struct Obj){ .tag = TAG_EOF };
 	const_nil = (struct Obj){ .tag = TAG_NIL };
 	scheme_gc_init();
-	globals = scheme_root_alloc();
+	scheme_root_push(&globals);
 	scheme_symbol_init();
 	scheme_builtins_init();
 }
@@ -108,34 +100,6 @@ void scheme_init(void) {
 /*
  * SECTION Managing GC Roots
  */
-
-void scheme_root_setup(struct Root *rt) {
-	rt->free = 0;
-	rt->prev = NULL;
-	rt->next = gc_roots;
-	rt->obj = const_nil;
-	
-	if(gc_roots) gc_roots->prev = rt;
-	gc_roots = rt;
-}
-
-struct Root *scheme_root_alloc(void) {
-	struct Root *rt = malloc(sizeof(struct Root));
-	assert(rt);
-	scheme_root_setup(rt);
-	rt->free = 1;
-	return rt;
-}
-
-void scheme_root_delete(struct Root *rt) {
-	if(rt->prev) rt->prev->next = rt->next;
-	else gc_roots = rt->next;
-	if(rt->next) rt->next->prev = rt->prev;
-	rt->prev = NULL;
-	rt->next = NULL;
-	rt->obj = const_nil;
-	if(rt->free) free(rt);
-}
 
 void scheme_root_push_value(struct Obj *obj) {
 	assert(gc_root_stack_height < ROOTSTACK_SIZE);
@@ -169,7 +133,6 @@ void scheme_gc_init(void) {
 	assert(gc_dead_space);
 	gc_free_ptr = gc_live_space;
 	gc_scan_ptr = NULL;
-	gc_roots = NULL;
 }
 
 struct Obj *scheme_gc_alloc_internal(int cells, int gc_loop_check) {
@@ -195,15 +158,11 @@ struct Obj *scheme_gc_alloc(int cells) {
 #define SWAP(x,y) do { struct Obj *tmp = x; x = y; y = tmp; } while(0)
 void scheme_gc(void) {
 	int i;
-	struct Root *rt;
 
 	SWAP(gc_live_space, gc_dead_space);
 	gc_free_ptr = gc_live_space;
 	gc_scan_ptr = gc_live_space;
 	
-	for(rt = gc_roots; rt; rt = rt->next)
-		scheme_gc_forward(&rt->obj);
-
 	for(i = 0; i < gc_root_stack_height; i++)
 		scheme_gc_forward(gc_root_stack[i]);
 
@@ -968,7 +927,7 @@ eval:
 	if(exp->tag == TAG_SYMBOL) {
 		res = scheme_assoc(exp, env);
 		if(res.tag == TAG_FALSE) {
-			res = scheme_assoc(exp, &globals->obj);
+			res = scheme_assoc(exp, &globals);
 		}
 		if(res.tag == TAG_FALSE) {
 			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol.id));
@@ -1188,7 +1147,7 @@ define_loop:
 		t2 = scheme_eval(&t2, env);
 		t1 = scheme_cons(&t1, &t2);
 		// TODO: overwrite existing
-		globals->obj = scheme_cons(&t1, &globals->obj);
+		globals = scheme_cons(&t1, &globals);
 		
 		scheme_root_pop();
 		scheme_root_pop();
@@ -1355,7 +1314,7 @@ void scheme_builtins_init(void) {
 		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL }; \
 		nm = scheme_symbol_intern(NAME); \
 		tmp = scheme_cons(&nm, &tmp); \
-		globals->obj = scheme_cons(&tmp, &globals->obj); \
+		globals = scheme_cons(&tmp, &globals); \
 	} while(0)
 
 	BUILTIN(preprocess, 1);
@@ -1423,32 +1382,32 @@ void wrap_preprocess(struct Obj *rt) {
 }
 
 int main(int argc, char **argv) {
-	struct Root *rt, *rt2, *res;
+	struct Obj rt, rt2, res;
 	int line_no = 0;
 
 	(void) argc;
 	(void) argv;
 	
 	scheme_init();
-	rt = scheme_root_alloc();
-	rt2 = scheme_root_alloc();
-	res = scheme_root_alloc();
+	scheme_root_push(&rt);
+	scheme_root_push(&rt2);
+	scheme_root_push(&res);
 	do {
-		rt->obj = const_nil;
-		scheme_read(&rt->obj, &line_no);
+		rt = const_nil;
+		scheme_read(&rt, &line_no);
 		
-		if(rt->obj.tag == TAG_EOF)
+		if(rt.tag == TAG_EOF)
 			break;
 		
-		wrap_preprocess(&rt->obj);
+		wrap_preprocess(&rt);
 		
-		rt2->obj = const_nil;
-		rt->obj = scheme_exec(&rt->obj, &rt2->obj, 0);
+		rt2 = const_nil;
+		rt = scheme_exec(&rt, &rt2, 0);
 		
-		rt2->obj = const_nil;
-		res->obj = scheme_exec(&rt->obj, &rt2->obj, 1);
+		rt2 = const_nil;
+		res = scheme_exec(&rt, &rt2, 1);
 		
-		res->obj = const_nil;
+		res = const_nil;
 		scheme_gc();
 	} while(1);
 	return 0;

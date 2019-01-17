@@ -4,11 +4,7 @@ We use a tagged union called `struct Obj`.
 
 # What is a root, and root stack
 
-They root structs are elements in a doubly linked list that the garbage collector scans. It gets used for both `gc_roots` and `globals`. `globals` is an assoc list of all the top level definitions from scheme.
-
-TODO: Can we actually just delete gc_roots?
-
-The rootstack is also scanned by the garbage collector. It lets procedures make a few objects they want to work with locally "rooted" (in the sense that GC will not erase them), it's important to stick to the convention of popping off what you push onto the root stack.
+The rootstack is scanned by the garbage collector. Anything reachable via a root will not be deleted by the GC process. It lets procedures make a few objects they want to work with locally "rooted" (in the sense that GC will not erase them), it's important to stick to the convention of popping off what you push onto the root stack.
 
 # What is a semispace?
 
