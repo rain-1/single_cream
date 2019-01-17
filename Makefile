@@ -17,7 +17,7 @@
 # Don't rebuild the built things in bin
 VPATH = bin
 CC=gcc
-CFLAGS=-D_GNU_SOURCE -O2 -std=c99 -ggdb -Wall -Werror -Wno-unused-variable
+CFLAGS=-D_GNU_SOURCE -O3 -std=c11 -ggdb -Wall -Werror -Wextra -Wpedantic -Wshadow -O3
 RUN_SCRIPT=./util/run.sh
 
 all: sch3

@@ -400,7 +400,7 @@ skip_comment:
 
 void scheme_read_atom(struct Obj *rt, int *line_no) {
 	int c;
-	int negative = 0;
+//	int negative = 0;
 
 #define ATOM_BUFLIMIT 256
 	char buf[ATOM_BUFLIMIT];
@@ -669,7 +669,6 @@ struct Obj scheme_eq(struct Obj *x, struct Obj *y) {
 }
 
 void scheme_display(struct Obj *x) {
-	int i;
 	char c;
 
 	switch(x->tag) {
@@ -1240,6 +1239,7 @@ struct Obj scheme_builtin_gensym(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_newline(struct Obj *args) {
+	(void) args;
 	puts("");
 	return const_nil;
 }
@@ -1311,10 +1311,10 @@ struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
 	assert(args[1].tag == TAG_NUMBER); \
 	return (args[0].number.val OP args[1].number.val) ? const_true : const_false; \
 }
-DEFINE_ARITH_COMPARE_BUILTIN(lt, <);
-DEFINE_ARITH_COMPARE_BUILTIN(gt, >);
-DEFINE_ARITH_COMPARE_BUILTIN(le, <=);
-DEFINE_ARITH_COMPARE_BUILTIN(ge, >=);
+DEFINE_ARITH_COMPARE_BUILTIN(lt, <)
+DEFINE_ARITH_COMPARE_BUILTIN(gt, >)
+DEFINE_ARITH_COMPARE_BUILTIN(le, <=)
+DEFINE_ARITH_COMPARE_BUILTIN(ge, >=)
 
 struct Obj scheme_builtin_display_char(struct Obj *args) {
 	assert(args[0].tag == TAG_CHARACTER);
@@ -1425,6 +1425,10 @@ void wrap_preprocess(struct Obj *rt) {
 int main(int argc, char **argv) {
 	struct Root *rt, *rt2, *res;
 	int line_no = 0;
+
+	(void) argc;
+	(void) argv;
+	
 	scheme_init();
 	rt = scheme_root_alloc();
 	rt2 = scheme_root_alloc();
