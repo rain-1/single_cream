@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/rain-1/single_cream.svg?branch=master)](https://travis-ci.org/rain-1/single_cream)
 
-**single cream** is a single C file AST based interpreter for a subset of scheme. It includes a basic standard library in scheme and an unhygenic "defmacro".
+**single cream** is a single C file AST based interpreter for a subset of scheme. It includes a basic standard library in scheme and an unhygienic "defmacro".
 
 The aims of this project are:
 
