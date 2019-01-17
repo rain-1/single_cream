@@ -441,7 +441,7 @@ LBL(read_atom_char)
 	case 't':
 		// TODO: check for ewline pace ab
 	default:
-		*rt = (struct Obj){ .tag = TAG_CHARACTER, .character.val = c };
+		*rt = (struct Obj){ .tag = TAG_CHARACTER, .character.val = (char) c };
 		return;
 	}
 
@@ -462,7 +462,7 @@ LBL(read_atom_string)
 		fprintf(stderr, "scheme_read_atom: token longer than buffer\n");
 		exit(1);
 	}
-	buf[buflen++] = c;
+	buf[buflen++] = (char) c;
 	buf[buflen] = '\0';
 	goto read_atom_string;
 
@@ -488,7 +488,7 @@ LBL(read_buf)
 		fprintf(stderr, "scheme_read_atom: token longer than buffer\n");
 		exit(1);
 	}
-	buf[buflen++] = c;
+	buf[buflen++] = (char) c;
 	buf[buflen] = '\0';
 	GETCHAR(c, stdin);
 	goto read_buf;
@@ -589,7 +589,7 @@ void scheme_build_string(struct Obj *rt, char *str) {
 	struct Obj rt_1;
 	
 	*rt = const_nil;
-	for(i = strlen(str)-1; i >= 0; i--) {
+	for(i = (int)strlen(str)-1; i >= 0; i--) {
 		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .character.val = str[i] };
 		*rt = scheme_cons(&rt_1, rt);
 	}
