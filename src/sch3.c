@@ -241,6 +241,7 @@ int symbol_table_size = 0;
 #define DO_SYMBOL(name) struct Obj sym_ ## name;
 DO_SYMBOLS
 #undef DO_SYMBOL
+struct Obj sym_set_bang;
 
 void scheme_symbol_init(void) {
 	int i;
@@ -260,6 +261,7 @@ void scheme_symbol_init(void) {
 #define DO_SYMBOL(name) INTERN_SYMBOL_X(name, ESCAPEQUOTE(name))
 DO_SYMBOLS
 #undef DO_SYMBOL
+sym_set_bang = scheme_symbol_intern("set!");
 }
 
 #undef DO_SYMBOLS
@@ -950,6 +952,28 @@ eval:
 		return *exp->cons.cdr->cons.car;
 	}
 		
+	if(scheme_eq_internal(exp->cons.car, &sym_set_bang)) {
+		// (set! <name> <val>)
+		
+		assert(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
+		*exp = *exp->cons.cdr;
+		assert(exp->cons.car->tag == TAG_SYMBOL);
+		
+		t1 = *exp->cons.cdr->cons.car;
+		t1 = scheme_eval_internal(&t1, env);
+		
+		res = scheme_assoc(exp->cons.car, env);
+		if(res.tag != TAG_CONS) {
+			fprintf(stderr, "scheme_builtin_set: failure looking up [%s]\n", scheme_symbol_name(exp->cons.car->symbol.id));
+			scheme_display(&res);
+			exit(1);
+		}
+		assert(res.tag == TAG_CONS);
+		*res.cons.cdr = t1;
+		
+		return *exp->cons.cdr->cons.car;
+	}
+
 	if(scheme_eq_internal(exp->cons.car, &sym_begin)) {
 		// (begin <exp> ...)
 		

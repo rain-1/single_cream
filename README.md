@@ -30,7 +30,7 @@ git submodule update
 For building and testing on nixos you can use the following shell:
 
 ```
-nix-shell -p autoreconfHook -p clang -p clangAnalyzer -p valgrind -p tinycc
+nix-shell -p autoreconfHook -p clang -p clangAnalyzer -p valgrind -p tinycc -p rlwrap
 ````
 
 ## Testing

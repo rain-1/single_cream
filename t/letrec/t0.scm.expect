@@ -1,0 +1,1 @@
+((lambda (local-even? local-odd?) (begin (set! local-even? (lambda (n) (if (= n 0) #t (local-odd? (- n 1))))) (set! local-odd? (lambda (n) (if (= n 0) #f (local-even? (- n 1))))) (cons (local-even? 23) (cons (local-odd? 23) (quote ()))))) #f #f)

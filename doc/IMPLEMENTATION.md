@@ -2,6 +2,8 @@
 
 We use a tagged union called `struct Obj`.
 
+The main disadvantage of this representation is that it is not efficient. All objects take the size of the biggest object type. This also means we can't have arbitrary length objects like strings. A better representation would be tagged pointers, like tarot has.
+
 # What is a root, and root stack
 
 The rootstack is scanned by the garbage collector. Anything reachable via a root will not be deleted by the GC process. It lets procedures make a few objects they want to work with locally "rooted" (in the sense that GC will not erase them), it's important to stick to the convention of popping off what you push onto the root stack.

@@ -46,6 +46,7 @@ test: sch3
 	./tests/tests t/rosetta "$(RUN_SCRIPT) {}"
 	./tests/tests t/scheme-tests "$(RUN_SCRIPT) {}"
 	./tests/tests t/sicp "$(RUN_SCRIPT) {}"
+	./tests/tests t/letrec "$(RUN_SCRIPT) {}"
 
 analyze:
 	echo '##' PERFORMING SCAN BUILD

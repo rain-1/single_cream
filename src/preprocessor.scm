@@ -135,29 +135,33 @@
 	   #f
 	   ,body))))
 
-;; redefine LET to support named let, using the Y combinator
+(define (make-empty-binding var)
+  `(,var #f))
 
-(define (y/n n f)
-  (let ((g (gensym 'g)))
-    (if (= n 1)
-	`((lambda (,g) (,g ,g))
-	  (lambda (,g)
-	    (,f (lambda (a) ((,g ,g) a)))))
-	(if (= n 2)
-	    `((lambda (,g) (,g ,g))
-	      (lambda (,g)
-		(,f (lambda (a b) ((,g ,g) a b)))))
-	    (if (= n 3)
-		`((lambda (,g) (,g ,g))
-		  (lambda (,g)
-		    (,f (lambda (a b c) ((,g ,g) a b c)))))
-		(error 'no-y-combinator))))))
+(defmacro letrec
+  (lambda (exp)
+    ;; (letrec ((<var> (lambda <args> . <body>)) ...) . <body>)
+    (let ((bindings (cadr exp))
+	  (body (cddr exp)))
+      (let ((vars (map car bindings))
+	    (lambdas (map cadr bindings)))
+	;; (let ((<var> #f) ...)
+	;;   (set! <var> <lambda>)
+	;;   ...
+	`(let ,(map make-empty-binding vars)
+	   ,(cons 'begin
+		  (append (map (lambda (binding)
+				 (let ((var (car binding))
+				       (lambda^ (cadr binding)))
+				   `(set! ,var ,lambda^)))
+			       bindings)
+			  body)))))))
+
+;; redefine LET to support named let
 
 (define (expand-named-let loop vars vals body)
-  `(,(y/n (length vars)
-	  `(lambda (,loop)
-	     (lambda ,vars . ,body)))
-    . ,vals))
+  `(letrec ((,loop (lambda ,vars . ,body)))
+     (,loop . ,vals)))
 
 (defmacro let
   (lambda (exp)
