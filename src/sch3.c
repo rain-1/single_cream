@@ -1249,6 +1249,21 @@ struct Obj scheme_builtin_newline_port(struct Obj *args) {
 	return const_nil;
 }
 
+struct Obj scheme_builtin_read_char(struct Obj *args) {
+	int c;
+	assert(args[0].tag == TAG_PORT);
+	c = fgetc(args[0].port.fptr);
+	if(c == -1) return const_eof;
+	return (struct Obj){ .tag = TAG_CHARACTER, .character.val = (char) c };
+}
+
+struct Obj scheme_builtin_write_char(struct Obj *args) {
+	assert(args[0].tag == TAG_PORT);
+	assert(args[1].tag == TAG_CHARACTER);
+	fputc(args[1].character.val, args[0].port.fptr);
+	return const_nil;
+}
+
 struct Obj scheme_builtin_error(struct Obj *args) {
 	fprintf(stderr, "Scheme Error: ");
 	scheme_display(stderr, &args[0]);
@@ -1411,6 +1426,8 @@ void scheme_builtins_init(void) {
 	BUILTIN_(display_port, "display/port", 2);
 	BUILTIN(newline, 0);
 	BUILTIN_(newline, "newline/port", 1);
+	BUILTIN_(read_char, "read-char", 1);
+	BUILTIN_(write_char, "write-char", 2);
 	BUILTIN(error, 1);
 	BUILTIN(gensym, 1);
 	BUILTIN_(eq, "eq?", 2);
