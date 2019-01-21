@@ -308,6 +308,8 @@ char *scheme_symbol_name(int id) {
 
 void scheme_read_many(struct Obj *rt, int *line_no);
 void scheme_build_string(struct Obj *rt, char *str);
+// inverse of build_string, but not actually part of reader
+void scheme_string_to_buf(struct Obj *obj, char *buf, int len);
 
 //#define DEBUG
 #ifdef DEBUG
@@ -567,6 +569,21 @@ void scheme_build_string(struct Obj *rt, char *str) {
 	*rt = rt_1;
 }
 
+void scheme_string_to_buf(struct Obj *obj, char *buf, int len) {
+	int i = 0; // len must be >= 1
+	
+	assert(obj->tag == TAG_STRING);
+	
+	obj = obj->string.it;
+	while(obj->tag == TAG_CONS) {
+		assert(obj->cons.car->tag == TAG_CHARACTER);
+		if(i + 1 > len) break;
+		buf[i] = obj->cons.car->character.val;
+		obj = obj->cons.cdr;
+		i++;
+	}
+	buf[i] = 0;
+}
 
 /*
  * SECTION scheme core
@@ -1220,6 +1237,18 @@ struct Obj scheme_builtin_display_port(struct Obj *args) {
 	return const_nil;
 }
 
+struct Obj scheme_builtin_newline(struct Obj *args) {
+	(void) args;
+	puts("");
+	return const_nil;
+}
+
+struct Obj scheme_builtin_newline_port(struct Obj *args) {
+	assert(args[0].tag == TAG_PORT);
+	fprintf(args[0].port.fptr, "\n");
+	return const_nil;
+}
+
 struct Obj scheme_builtin_error(struct Obj *args) {
 	fprintf(stderr, "Scheme Error: ");
 	scheme_display(stderr, &args[0]);
@@ -1236,12 +1265,6 @@ struct Obj scheme_builtin_gensym(struct Obj *args) {
 		exit(1);
 	}
 	return scheme_symbol_intern(name);
-}
-
-struct Obj scheme_builtin_newline(struct Obj *args) {
-	(void) args;
-	puts("");
-	return const_nil;
 }
 
 struct Obj scheme_builtin_eq(struct Obj *args) {
@@ -1349,6 +1372,25 @@ struct Obj scheme_builtin_char_to_integer(struct Obj *args) {
 	return (struct Obj){ .tag = TAG_NUMBER, .number.val = args[0].character.val };
 }
 
+#define PATH_MAX 1024
+struct Obj scheme_builtin_open_input_output_file(char *mode, struct Obj *args) {
+	FILE* fptr;
+	char filename[PATH_MAX] = { 0 };
+	assert(args[0].tag == TAG_STRING);
+	scheme_string_to_buf(&args[0], filename, PATH_MAX);
+	fptr = fopen(filename, mode);
+	if(!fptr) return const_false;
+	return (struct Obj){ .tag = TAG_PORT, .port.fptr = fptr };
+}
+
+struct Obj scheme_builtin_open_input_file(struct Obj *args) {
+	return scheme_builtin_open_input_output_file("r", args);
+}
+
+struct Obj scheme_builtin_open_output_file(struct Obj *args) {
+	return scheme_builtin_open_input_output_file("w", args);
+}
+
 void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
 	scheme_root_push(&tmp);
@@ -1368,6 +1410,7 @@ void scheme_builtins_init(void) {
 	BUILTIN(display, 1);
 	BUILTIN_(display_port, "display/port", 2);
 	BUILTIN(newline, 0);
+	BUILTIN_(newline, "newline/port", 1);
 	BUILTIN(error, 1);
 	BUILTIN(gensym, 1);
 	BUILTIN_(eq, "eq?", 2);
@@ -1407,6 +1450,9 @@ void scheme_builtins_init(void) {
 	BUILTIN_(vector_to_list, "vector->list", 1);
 	BUILTIN_(list_to_vector, "list->vector", 1);
 	BUILTIN_(char_to_integer, "char->integer", 1);
+	
+	BUILTIN_(open_input_file, "open-input-file", 1);
+	BUILTIN_(open_output_file, "open-output-file", 1);
 	
 	scheme_root_pop();
 	scheme_root_pop();

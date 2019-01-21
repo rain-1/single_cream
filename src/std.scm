@@ -1,3 +1,14 @@
+;;;; FILE IO
+
+(define (with-input-file filename proc)
+  (cond ((open-input-file filename) => proc)
+        (else #f)))
+
+(define (with-output-file filename proc)
+  (cond ((open-output-file filename) => proc)
+        (else #f)))
+
+
 ;;; queue
 
 (define (empty-queue) (list->vector (list 'queue '() #f)))
