@@ -70,6 +70,14 @@
       (cons (f (car l))
             (map f (cdr l)))))
 
+(define (map/2 f l h)
+  (if (null? l)
+      (if (not (null? h))
+	  (error 'map/2 "lists of different length" #f)
+	  '())
+      (cons (f (car l) (car h))
+            (map/2 f (cdr l) (cdr h)))))
+
 (define (for-each f l)
   (if (null? l)
       #f
@@ -152,6 +160,18 @@
       list
       (insert-by < (car list) (sort-by < (cdr list)))))
 
+(define (concat-map func lst)
+  (if (null? lst)
+      '()
+      (append (func (car lst))
+              (concat-map func (cdr lst)))))
+
+(define (concatenate lists) (concat-map (lambda (i) i) lists))
+
+(define (copy-list l) (map (lambda (i) i) l))
+
+(define (replicate n elt)
+  (if (= n 0) '() (cons elt (replicate (- n 1) elt))))
 
 ;;;; STRING
 (define (display-string s) (for-each display-char (string->list s)))
@@ -163,6 +183,13 @@
 
 ;;;; BOXES
 (define (box val) (cons 'box val))
+(define (box? val)
+  (if (pair? val)
+      (if (eq? 'box (car val))
+	  #t
+	  #f)
+      #f))
 (define (unbox b) (cdr b))
 (define (set-box! b v) (set-cdr! b v) b)
-
+(define (push-box! b val)
+ (set-box! b (cons val (unbox b))))

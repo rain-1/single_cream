@@ -236,3 +236,92 @@
 			       (begin . ,rest)
 			       ,(cond-get-next exp)))
 			(error 'cond-bad-syntax))))))))
+
+;;; TAROT STUFF
+
+;; redefine OR and AND
+
+(defmacro or
+  (lambda (t)
+    (if (null? (cdr t))
+	#f
+	(if (null? (cddr t))
+	    (cadr t)
+	    (let ((a (cadr t))
+		  (b (cddr t))
+		  (tmp (gensym 'tmp)))
+	      `(let ((,tmp ,a))
+		 (if ,tmp ,tmp (or . ,b))))))))
+
+(defmacro and
+  (lambda (t)
+    (if (null? (cdr t))
+	#t
+	(if (null? (cddr t))
+	    (cadr t)
+	    (let ((a (cadr t))
+		  (b (cddr t)))
+	      `(if ,a (and . ,b) #f))))))
+;; <case> ::= (case <exp> <clause> (else <exp>))
+;;
+;; <clause> ::= ((<thing>) <exp>)
+
+;; (case foo ((x) 1) ((y) 2) (else 3))
+;; -->
+;; let tmp foo
+;; (if (eq? tmp 'x) 1)
+;;   ...((y) 2) (else 3))
+
+(define (else-clause? head)
+  (and (pair? head)
+       (eq? 'else (car head))))
+
+(define (length-1? lst)
+ (if (null? lst) #f (if (null? (cdr lst)) #t #f)))
+
+(define (length-2? lst)
+ (if (null? lst) #f (length-1? (cdr lst))))
+
+(define (compile-case t clauses)
+  (if (null? clauses)
+      '(exit)
+      (let ((head (car clauses))
+            (rest (cdr clauses)))
+        (if (else-clause? head)
+            (cadr head) ;; TODO: else needs implicit begin
+            (let ((test (car head))
+                  (body (cdr head)))
+              `(if ,(if (length-1? test)
+                        `(equal? ,t ',(car test))
+                        (if (length-2? test)
+                            `(or (equal? ,t ',(car test))
+                                 (equal? ,t ',(cadr test)))
+                            `(member ,t ',test)))
+                   (begin . ,body)
+                   ,(compile-case t rest)))))))
+
+(defmacro case
+  (lambda (exp)
+    (let ((discriminant (cadr exp))
+          (tmp (gensym "tmp")))
+      `(let ((,tmp ,discriminant))
+         ,(compile-case tmp (cddr exp))))))
+
+(defmacro mapply
+  (lambda (exp)
+    ;;(mapply f xs arg ...)
+    (let ((f (cadr exp))
+	  (xs (caddr exp))
+	  (args (cdddr exp))
+	  (x (gensym "x")))
+      `(map (lambda (,x) (,f ,x . ,args)) ,xs))))
+
+(defmacro inc!
+  (lambda (form)
+    (let ((x (cadr form)))
+      `(set-box! ,x (+ (unbox ,x) 1)))))
+
+(defmacro dec!
+  (lambda (form)
+    (let ((x (cadr form)))
+      `(set-box! ,x (- (unbox ,x) 1)))))

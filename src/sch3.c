@@ -1327,6 +1327,11 @@ struct Obj scheme_builtin_list_to_vector(struct Obj *args) {
 	return s;
 }
 
+struct Obj scheme_builtin_char_to_integer(struct Obj *args) {
+	assert(args[0].tag == TAG_CHARACTER);
+	return (struct Obj){ .tag = TAG_NUMBER, .number.val = args[0].character.val };
+}
+
 void scheme_builtins_init(void) {
 	struct Obj tmp, nm;
 	scheme_root_push(&tmp);
@@ -1383,6 +1388,7 @@ void scheme_builtins_init(void) {
 	BUILTIN_(list_to_string, "list->string", 1);
 	BUILTIN_(vector_to_list, "vector->list", 1);
 	BUILTIN_(list_to_vector, "list->vector", 1);
+	BUILTIN_(char_to_integer, "char->integer", 1);
 	
 	scheme_root_pop();
 	scheme_root_pop();
