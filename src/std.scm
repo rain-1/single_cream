@@ -11,12 +11,12 @@
 
 ;;; queue
 
-(define (empty-queue) (list->vector (list 'queue '() #f)))
+(define (empty-queue) (list 'queue '() #f))
 
-(define (queue:top q) (vector-ref q 1))
-(define (queue:bot q) (vector-ref q 2))
-(define (queue:top! q v) (vector-set! q 1 v))
-(define (queue:bot! q v) (vector-set! q 2 v))
+(define (queue:top q) (list-ref q 1))
+(define (queue:bot q) (list-ref q 2))
+(define (queue:top! q v) (list-set! q 1 v))
+(define (queue:bot! q v) (list-set! q 2 v))
 
 (define (queue-push! q v)
   (if (queue:bot q)

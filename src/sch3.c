@@ -1301,6 +1301,21 @@ struct Obj scheme_builtin_read_char(struct Obj *args) {
 	return (struct Obj){ .tag = TAG_CHARACTER, .character.val = (char) c };
 }
 
+int fpeek(FILE *stream) {
+	int c;
+	c = fgetc(stream);
+ 	ungetc(c, stream);
+	return c;
+}
+
+struct Obj scheme_builtin_peek_char(struct Obj *args) {
+	int c;
+	assert(args[0].tag == TAG_PORT);
+	c = fpeek(args[0].port.fptr);
+	if(c == -1) return const_eof;
+	return (struct Obj){ .tag = TAG_CHARACTER, .character.val = (char) c };
+}
+
 struct Obj scheme_builtin_write_char(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
 	assert(args[1].tag == TAG_CHARACTER);
@@ -1485,6 +1500,7 @@ void scheme_builtins_init(void) {
 	BUILTIN(newline, 0);
 	BUILTIN_(newline, "newline/port", 1);
 	BUILTIN_(read_char, "read-char", 1);
+	BUILTIN_(peek_char, "peek-char", 1);
 	BUILTIN_(write_char, "write-char", 2);
 	BUILTIN(close, 1);
 	BUILTIN(error, 1);

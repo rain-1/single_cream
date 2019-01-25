@@ -325,3 +325,7 @@
   (lambda (form)
     (let ((x (cadr form)))
       `(set-box! ,x (- (unbox ,x) 1)))))
+
+(defmacro let* ;; just an alias for our LET
+  (lambda (form)
+    `(let . ,(cdr form))))

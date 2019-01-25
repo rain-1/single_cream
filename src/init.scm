@@ -69,6 +69,14 @@
       #f ;; XXX ERROR
       ))
 
+(define (list-set! lst i val)
+  (if (pair? lst)
+      (if (= i 0)
+	  (set-car! lst val)
+	  (list-set! (cdr lst) (- i 1) val))
+      #f ;; XXX ERROR
+      ))
+
 (define (map f l)
   (if (null? l)
       '()
