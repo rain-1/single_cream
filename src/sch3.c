@@ -405,11 +405,53 @@ LBL(read_atom_hash)
 LBL(read_atom_char)
 	GETCHAR(c, stdin);
 	switch(c) {
-	case 'n':
-	case 's':
 	case 't':
-		// TODO: check for ewline pace ab
+		GETCHAR(c, stdin);
+		if(c != 'a') {
+			UNGETCHAR(c, stdin);
+			c = 't';
+			goto finish_atom_char;
+		}
+		GETCHAR(c, stdin);
+		assert(c == 'b');
+		c = '\t';
+		goto finish_atom_char;
+	case 'n':
+		GETCHAR(c, stdin);
+		if(c != 'e') {
+			UNGETCHAR(c, stdin);
+			c = 'n';
+			goto finish_atom_char;
+		}
+		GETCHAR(c, stdin);
+		assert(c == 'w');
+		GETCHAR(c, stdin);
+		assert(c == 'l');
+		GETCHAR(c, stdin);
+		assert(c == 'i');
+		GETCHAR(c, stdin);
+		assert(c == 'n');
+		GETCHAR(c, stdin);
+		assert(c == 'e');
+		c = '\n';
+		goto finish_atom_char;
+	case 's':
+		GETCHAR(c, stdin);
+		if(c != 'p') {
+			UNGETCHAR(c, stdin);
+			c = 's';
+			goto finish_atom_char;
+		}
+		GETCHAR(c, stdin);
+		assert(c == 'a');
+		GETCHAR(c, stdin);
+		assert(c == 'c');
+		GETCHAR(c, stdin);
+		assert(c == 'e');
+		c = ' ';
+		goto finish_atom_char;
 	default:
+LBL(finish_atom_char)
 		*rt = (struct Obj){ .tag = TAG_CHARACTER, .character.val = (char) c };
 		return;
 	}
@@ -674,8 +716,10 @@ void scheme_display(FILE *fptr, struct Obj *x) {
 		fprintf(fptr, "%d", x->number.val);
 		break;
 	case TAG_CHARACTER:
-		// TODO: escaping special characters
-		fprintf(fptr, "#\\%c", x->character.val);
+		if(x->character.val == '\n') fprintf(fptr, "#\\newline");
+		else if(x->character.val == '\t') fprintf(fptr, "#\\tab");
+		else if(x->character.val == ' ') fprintf(fptr, "#\\space");
+		else fprintf(fptr, "#\\%c", x->character.val);
 		break;
 	case TAG_NIL:
 		fprintf(fptr, "()");
