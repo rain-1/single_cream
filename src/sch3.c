@@ -1394,6 +1394,13 @@ struct Obj scheme_builtin_char_to_integer(struct Obj *args) {
 	return (struct Obj){ .tag = TAG_NUMBER, .number.val = args[0].character.val };
 }
 
+struct Obj scheme_builtin_string_to_symbol(struct Obj *args) {
+	char buf[128] = { 0 };
+	assert(args[0].tag == TAG_STRING);
+	scheme_string_to_buf(&args[0], buf, sizeof buf);
+	return scheme_symbol_intern(buf);
+}
+
 #define PATH_MAX 1024
 struct Obj scheme_builtin_open_input_output_file(char *mode, struct Obj *args) {
 	FILE* fptr;
@@ -1437,7 +1444,7 @@ void scheme_builtins_init(void) {
 	BUILTIN_(write_char, "write-char", 2);
 	BUILTIN(close, 1);
 	BUILTIN(error, 1);
-	BUILTIN(gensym, 1);
+	BUILTIN_(gensym, "builtin-gensym", 1);
 	BUILTIN_(eq, "eq?", 2);
 
 	BUILTIN(cons, 2);
@@ -1475,6 +1482,7 @@ void scheme_builtins_init(void) {
 	BUILTIN_(vector_to_list, "vector->list", 1);
 	BUILTIN_(list_to_vector, "list->vector", 1);
 	BUILTIN_(char_to_integer, "char->integer", 1);
+	BUILTIN_(string_to_symbol, "string->symbol", 1);
 	
 	BUILTIN_(open_input_file, "open-input-file", 1);
 	BUILTIN_(open_output_file, "open-output-file", 1);

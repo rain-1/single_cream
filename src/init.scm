@@ -5,6 +5,11 @@
 
 (define (compose f g) (lambda (x) (f (g x))))
 
+(define (gensym s)
+  (if (string? s)
+      (builtin-gensym (string->symbol s))
+      (builtin-gensym s)))
+
 ;; NUMBERS
 (define (zero? x) (= x 0))
 (define modulo remainder)

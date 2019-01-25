@@ -303,7 +303,7 @@
 (defmacro case
   (lambda (exp)
     (let ((discriminant (cadr exp))
-          (tmp (gensym "tmp")))
+          (tmp (gensym 'tmp)))
       `(let ((,tmp ,discriminant))
          ,(compile-case tmp (cddr exp))))))
 
