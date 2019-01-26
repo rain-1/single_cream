@@ -326,6 +326,28 @@
     (let ((x (cadr form)))
       `(set-box! ,x (- (unbox ,x) 1)))))
 
-(defmacro let* ;; just an alias for our LET
+(define (make-let* bindings body)
+  (if (null? bindings)
+      `(begin
+	 . ,body)
+      (if (null? (cdr bindings))
+	  `(let (,(car bindings))
+	     . ,body)
+	  `(let (,(car bindings))
+	     ,(make-let* (cdr bindings) body)))))
+
+(defmacro let*
   (lambda (form)
-    `(let . ,(cdr form))))
+    ;; `(let <bindings> . <body>)
+    (let ((bindings (cadr form))
+	  (body (cddr form)))
+      (make-let* bindings body))))
+
+;; some code uses arity 1 ERROR
+;; other code uses arity 3 ERROR inherited from Chez
+;; this hack works around it
+(defmacro error
+  (lambda (form)
+    (if (null? (cddr form))
+	`(builtin-error ,(cadr form))
+	`(builtin-error ,(caddr form)))))

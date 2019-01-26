@@ -33,7 +33,7 @@ struct Obj {
 		struct { char val; } character;
 		struct { struct Obj *car, *cdr; } cons;
 		struct { struct Obj *args, *env, *body; } closure;
-		struct { int n_args; struct Obj (*impl)(struct Obj *args); } builtin;
+		struct { int n_args; struct Obj (*impl)(struct Obj *args); char *name; } builtin;
 		struct { struct Obj *it; } string;
 		struct { struct Obj *it; } vector;
 		struct { FILE *fptr; } port;
@@ -770,7 +770,7 @@ loop:
 		scheme_display(fptr, x->vector.it);
 		break;
 	case TAG_BUILTIN:
-		fprintf(fptr, "#<builtin>");
+		fprintf(fptr, "#<builtin:%s>", x->builtin.name);
 		break;
 	case TAG_GC:
 		fprintf(fptr, "#<gcfwd[%s]>", scheme_gc_dead(x->gc.fwd) ? "dead" : "live");
@@ -1133,6 +1133,12 @@ loop_begin:
 	f = *exp->cons.car;
 	vals = *exp->cons.cdr;
 
+#ifdef DEBUG
+	if(f.tag == TAG_SYMBOL) {
+		printf("DEBUG: calling %s\n", scheme_symbol_name(f.symbol.id));
+	}
+#endif
+
 	f = scheme_eval(&f, env);
 	vals = scheme_evlist(&vals, env);
 	
@@ -1146,14 +1152,14 @@ loop_begin:
 		for(i = 0; i < f.builtin.n_args; i++) {
 			scheme_root_push_value(&args[i]);
 			if(vals.tag != TAG_CONS) {
-				fprintf(stderr, "scheme_eval: too few args when calling builtin.\n");
+				fprintf(stderr, "scheme_eval: too few args when calling builtin:%s.\n", f.builtin.name);
 				exit(1);
 			}
 			args[i] = *vals.cons.car;
 			vals = *vals.cons.cdr;
 		}
 		if(vals.tag != TAG_NIL) {
-			fprintf(stderr, "scheme_eval: too many args when calling builtin.\n");
+			fprintf(stderr, "scheme_eval: too many args when calling builtin:%s.\n", f.builtin.name);
 			exit(1);
 		}
 		res = f.builtin.impl(args);
@@ -1268,6 +1274,11 @@ define_loop:
 
 struct Obj scheme_builtin_preprocess(struct Obj *args) {
 	return args[0];
+}
+
+struct Obj preprocess_eval(struct Obj *rt);
+struct Obj scheme_builtin_eval(struct Obj *args) {
+	return preprocess_eval(&args[0]);
 }
 
 struct Obj scheme_builtin_display(struct Obj *args) {
@@ -1487,13 +1498,14 @@ void scheme_builtins_init(void) {
 #define BUILTIN_(IMPL, NAME, NARGS) \
 	do { \
 		assert(NARGS <= MAX_BUILTIN_ARGS); \
-		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL }; \
+		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL, .builtin.name = NAME }; \
 		nm = scheme_symbol_intern(NAME); \
 		tmp = scheme_cons(&nm, &tmp); \
 		globals = scheme_cons(&tmp, &globals); \
 	} while(0)
 
 	BUILTIN(preprocess, 1);
+	BUILTIN(eval, 1);
 
 	BUILTIN(display, 1);
 	BUILTIN_(display_port, "display/port", 2);
@@ -1503,7 +1515,7 @@ void scheme_builtins_init(void) {
 	BUILTIN_(peek_char, "peek-char", 1);
 	BUILTIN_(write_char, "write-char", 2);
 	BUILTIN(close, 1);
-	BUILTIN(error, 1);
+	BUILTIN_(error, "builtin-error", 1);
 	BUILTIN_(gensym, "builtin-gensym", 1);
 	BUILTIN_(eq, "eq?", 2);
 
@@ -1571,9 +1583,12 @@ void scheme_constants_init(void) {
  * SECTION main
  */
 
-void wrap_preprocess(struct Obj *rt) {
-	// TODO: tidy
-	
+struct Obj preprocess_eval(struct Obj *rt) {
+	struct Obj rt2, res;
+
+	scheme_root_push(&rt2);
+	scheme_root_push(&res);
+
 	*rt = scheme_cons(rt, NULL);
 	*rt = scheme_cons(NULL, rt);
 	*rt->cons.car = sym_quote;
@@ -1581,10 +1596,21 @@ void wrap_preprocess(struct Obj *rt) {
 	*rt = scheme_cons(rt, NULL);
 	*rt = scheme_cons(NULL, rt);
 	*rt->cons.car = sym_preprocess;
+	
+	rt2 = const_nil;
+	*rt = scheme_exec(rt, &rt2, 0);
+	
+	rt2 = const_nil;
+	res = scheme_exec(rt, &rt2, 1);
+	
+	scheme_root_pop();
+	scheme_root_pop();
+	
+	return res;
 }
 
 int main(int argc, char **argv) {
-	struct Obj rt, rt2, res;
+	struct Obj rt;
 	int line_no = 0;
 
 	(void) argc;
@@ -1592,8 +1618,6 @@ int main(int argc, char **argv) {
 	
 	scheme_init();
 	scheme_root_push(&rt);
-	scheme_root_push(&rt2);
-	scheme_root_push(&res);
 	do {
 		rt = const_nil;
 		scheme_read(&rt, &line_no);
@@ -1601,15 +1625,7 @@ int main(int argc, char **argv) {
 		if(rt.tag == TAG_EOF)
 			break;
 		
-		wrap_preprocess(&rt);
-		
-		rt2 = const_nil;
-		rt = scheme_exec(&rt, &rt2, 0);
-		
-		rt2 = const_nil;
-		res = scheme_exec(&rt, &rt2, 1);
-		
-		res = const_nil;
+		preprocess_eval(&rt);
 		scheme_gc();
 	} while(1);
 	return 0;

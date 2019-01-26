@@ -28,7 +28,7 @@
 (define (queue-pop! q)
   (let ((top (queue:top q)))
     (if (null? top)
-	(error 'queue-pop! 0 0)
+	(error 'queue-pop! "queue-pop!" 0)
 	(begin
 	  (queue:top! q (cdr top))
 	  (when (null? (cdr top))
@@ -53,13 +53,13 @@
 (define (seq->dlist seq tail)
   (cond ((elt? seq) (cons (elt-get-elt seq) tail))
 	((cat? seq) (fold seq->dlist tail (cat-get-seqs seq)))
-	(else (error 'seq->dlist "?" seq))))
+	(else (error 'seq->dlist "seq->dlist" seq))))
 (define (seq->list seq) (seq->dlist seq '()))
 
 (define (seq-length^ seq tail)
   (cond ((elt? seq) (+ 1 tail))
 	((cat? seq) (fold seq-length^ tail (cat-get-seqs seq)))
-	(else (error 'seq-length^ "?" seq))))
+	(else (error 'seq-length^ "seq-length" seq))))
 (define (seq-length seq) (seq-length^ seq 0))
 
 
