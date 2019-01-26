@@ -348,6 +348,11 @@
 ;; this hack works around it
 (defmacro error
   (lambda (form)
-    (if (null? (cddr form))
+    (if (or (null? (cddr form))
+	    (null? (cdddr form)))
 	`(builtin-error ,(cadr form))
-	`(builtin-error ,(caddr form)))))
+	`(begin (display/port stderr ,(cadr form))
+		(newline/port stderr)
+		(display/port stderr ,(cadddr form))
+		(newline/port stderr)
+		(builtin-error ,(caddr form))))))

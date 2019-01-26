@@ -1471,6 +1471,16 @@ struct Obj scheme_builtin_string_to_symbol(struct Obj *args) {
 	return scheme_symbol_intern(buf);
 }
 
+struct Obj scheme_builtin_symbol_to_string(struct Obj *args) {
+	struct Obj res;
+	assert(args[0].tag == TAG_SYMBOL);
+	scheme_root_push(&res);
+	scheme_build_string(&res, scheme_symbol_name(args[0].symbol.id));
+	scheme_root_pop();
+	
+	return res;
+}
+
 #define PATH_MAX 1024
 struct Obj scheme_builtin_open_input_output_file(char *mode, struct Obj *args) {
 	FILE* fptr;
@@ -1555,6 +1565,7 @@ void scheme_builtins_init(void) {
 	BUILTIN_(list_to_vector, "list->vector", 1);
 	BUILTIN_(char_to_integer, "char->integer", 1);
 	BUILTIN_(string_to_symbol, "string->symbol", 1);
+	BUILTIN_(symbol_to_string, "symbol->string", 1);
 	
 	BUILTIN_(open_input_file, "open-input-file", 1);
 	BUILTIN_(open_output_file, "open-output-file", 1);

@@ -100,3 +100,13 @@
 	  n
 	  (let ((digit (string-ref s i)))
 	    (loop (+ (* 10 n) (digit->number digit)) (+ i 1)))))))
+
+;; extra list stuff
+
+(define (index nm lst)
+  (let loop ((i 0) (lst lst))
+    (if (null? lst)
+        #f
+        (if (eq? nm (car lst))
+            i
+            (loop (+ i 1) (cdr lst))))))

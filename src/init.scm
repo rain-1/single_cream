@@ -193,6 +193,11 @@
 (define (string-length s) (length (string->list s)))
 (define (string-ref s i) (list-ref (string->list s) i))
 
+(define (string-append x y)
+  (list->string
+   (append (string->list x)
+	   (string->list y))))
+
 
 ;;;; BOXES
 (define (box val) (cons 'box val))
