@@ -1,0 +1,30 @@
+(define (string-ends-with? str suf)
+  (let* ((str-len (string-length str))
+         (suf-len (string-length suf))
+         (start (- str-len suf-len)))
+    (if (>= str-len suf-len)
+        (let loop ((i 0))
+          (if (= i suf-len)
+              #t
+              (and (equal? (string-ref str (+ start i))
+                           (string-ref suf i))
+                   (loop (+ i 1)))))
+        #f)))
+
+(define (string-trim str len)
+  (unless (> (string-length str) len)
+    (error 'string-trim "string not large enough to trimp" len))
+  (let ((str^ (make-string len #\#)))
+    (let loop ((i 0))
+       (if (= i len)
+           str^
+           (begin (string-set! str^ i (string-ref str i))
+                  (loop (+ i 1)))))))
+
+(define (remove-suffix str suf)
+  (if (string-ends-with? str suf)
+      (string-trim str (- (string-length str) (string-length suf)))
+      str))
+
+(define (add-suffix str suf)
+  (list->string (append (string->list str) (string->list suf))))
