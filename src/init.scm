@@ -198,6 +198,12 @@
    (append (string->list x)
 	   (string->list y))))
 
+(define (make-string len chr)
+  (list->string (replicate len chr)))
+
+(define (string-set! str i val)
+  (list->string (list-set! (string->list str) i val)))
+
 
 ;;;; BOXES
 (define (box val) (cons 'box val))
