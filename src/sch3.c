@@ -1277,9 +1277,9 @@ struct Obj scheme_builtin_preprocess(struct Obj *args) {
 	return args[0];
 }
 
-struct Obj preprocess_eval(struct Obj *rt);
+struct Obj preprocess_eval(struct Obj *rt, int display_result);
 struct Obj scheme_builtin_eval(struct Obj *args) {
-	return preprocess_eval(&args[0]);
+	return preprocess_eval(&args[0], 0);
 }
 
 struct Obj scheme_builtin_display(struct Obj *args) {
@@ -1526,7 +1526,7 @@ void scheme_builtins_init(void) {
 	BUILTIN(display, 1);
 	BUILTIN_(display_port, "display/port", 2);
 	BUILTIN(newline, 0);
-	BUILTIN_(newline, "newline/port", 1);
+	BUILTIN_(newline_port, "newline/port", 1);
 	BUILTIN_(read_char, "read-char", 1);
 	BUILTIN_(peek_char, "peek-char", 1);
 	BUILTIN_(write_char, "write-char", 2);
@@ -1601,7 +1601,7 @@ void scheme_constants_init(void) {
  * SECTION main
  */
 
-struct Obj preprocess_eval(struct Obj *rt) {
+struct Obj preprocess_eval(struct Obj *rt, int display_result) {
 	struct Obj rt2, res;
 
 	scheme_root_push(&rt2);
@@ -1619,7 +1619,7 @@ struct Obj preprocess_eval(struct Obj *rt) {
 	*rt = scheme_exec(rt, &rt2, 0);
 	
 	rt2 = const_nil;
-	res = scheme_exec(rt, &rt2, 1);
+	res = scheme_exec(rt, &rt2, display_result);
 	
 	scheme_root_pop();
 	scheme_root_pop();
@@ -1643,7 +1643,7 @@ int main(int argc, char **argv) {
 		if(rt.tag == TAG_EOF)
 			break;
 		
-		preprocess_eval(&rt);
+		preprocess_eval(&rt, 1);
 		scheme_gc();
 	} while(1);
 	return 0;
