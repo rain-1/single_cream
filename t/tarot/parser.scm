@@ -205,8 +205,9 @@
     (parse q)))
 
 (define (read-file filename)
-  (with-input-file filename
-    (lambda (port)
-      (read-port port))))
+  (or (with-input-file filename
+		       (lambda (port)
+			 (read-port port)))
+      (error 'read-file 'file-not-found filename)))
 
 ;(read-file "./t/tarot/parser.scm")
