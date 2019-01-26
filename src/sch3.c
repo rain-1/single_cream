@@ -41,14 +41,14 @@ struct Obj {
 	};
 };
 
-#define SEMISPACE_SIZE (1<<17)
+#define SEMISPACE_SIZE (1<<18)
 struct Obj *gc_live_space, *gc_dead_space;
 struct Obj *gc_free_ptr, *gc_scan_ptr;
 #define ROOTSTACK_SIZE (1<<16)
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
 
-#define MAX_SYMBOLS (1<<10)
+#define MAX_SYMBOLS (1<<11)
 char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
@@ -77,7 +77,7 @@ void scheme_read(struct Obj *rt, int *line_no);
 
 struct Obj scheme_cons(struct Obj *x, struct Obj *y);
 struct Obj scheme_closure(struct Obj *args, struct Obj *env, struct Obj *body);
-void scheme_display(FILE *fptr, struct Obj *x);
+void scheme_display(FILE *fptr, struct Obj *x, int write);
 struct Obj scheme_eq(struct Obj *x, struct Obj *y);
 struct Obj scheme_append(struct Obj *xs, struct Obj *ys);
 struct Obj scheme_assoc(struct Obj *key, struct Obj *table);
@@ -696,7 +696,7 @@ struct Obj scheme_eq(struct Obj *x, struct Obj *y) {
 	return scheme_eq_internal(x, y) ? const_true : const_false;
 }
 
-void scheme_display(FILE *fptr, struct Obj *x) {
+void scheme_display(FILE *fptr, struct Obj *x, int write) {
 	char c;
 
 	switch(x->tag) {
@@ -716,11 +716,14 @@ void scheme_display(FILE *fptr, struct Obj *x) {
 		fprintf(fptr, "%d", x->number.val);
 		break;
 	case TAG_CHARACTER:
-		if(x->character.val == '\n') fprintf(fptr, "#\\newline");
-		else if(x->character.val == '\t') fprintf(fptr, "#\\tab");
-		else if(x->character.val == ' ') fprintf(fptr, "#\\space");
-		else if(x->character.val == '\0') fputc(0, fptr);
-		else fprintf(fptr, "#\\%c", x->character.val);
+		if(write) {
+			if(x->character.val == '\n') fprintf(fptr, "#\\newline");
+			else if(x->character.val == '\t') fprintf(fptr, "#\\tab");
+			else if(x->character.val == ' ') fprintf(fptr, "#\\space");
+			else fprintf(fptr, "#\\%c", x->character.val);
+		} else {
+			fputc(x->character.val, fptr);
+		}
 		break;
 	case TAG_NIL:
 		fprintf(fptr, "()");
@@ -728,7 +731,7 @@ void scheme_display(FILE *fptr, struct Obj *x) {
 	case TAG_CONS:
 		fprintf(fptr, "(");
 loop:
-		scheme_display(fptr, x->cons.car);
+		scheme_display(fptr, x->cons.car, write);
 		switch(x->cons.cdr->tag) {
 		case TAG_NIL:
 			fprintf(fptr, ")");
@@ -739,7 +742,7 @@ loop:
 			goto loop;
 		default:
 			fprintf(fptr, " . ");
-			scheme_display(fptr, x->cons.cdr);
+			scheme_display(fptr, x->cons.cdr, write);
 			fprintf(fptr, ")");
 			break;
 		}
@@ -751,24 +754,24 @@ loop:
 		fprintf(fptr, "#<port>");
 		break;
 	case TAG_STRING:
-		fprintf(fptr, "\"");
+		if(write) fprintf(fptr, "\"");
 		x = x->string.it;
 		while(x->tag == TAG_CONS) {
 			assert(x->cons.car->tag == TAG_CHARACTER);
 			c = x->cons.car->character.val;
 			x = x->cons.cdr;
-			if(c == '\\' || c == '"') {
+			if(write && (c == '\\' || c == '"')) {
 				fprintf(fptr, "\\%c", c);
 			}
 			else {
 				fprintf(fptr, "%c", c);
 			}
 		}
-		fprintf(fptr, "\"");
+		if(write) fprintf(fptr, "\"");
 		break;
 	case TAG_VECTOR:
 		fprintf(fptr, "#");
-		scheme_display(fptr, x->vector.it);
+		scheme_display(fptr, x->vector.it, write);
 		break;
 	case TAG_BUILTIN:
 		fprintf(fptr, "#<builtin:%s>", x->builtin.name);
@@ -1038,7 +1041,7 @@ eval:
 		res = scheme_assoc(exp->cons.car, env);
 		if(res.tag != TAG_CONS) {
 			fprintf(stderr, "scheme_builtin_set: failure looking up [%s]\n", scheme_symbol_name(exp->cons.car->symbol.id));
-			scheme_display(stdout, &res);
+			scheme_display(stdout, &res, 1);
 			exit(1);
 		}
 		assert(res.tag == TAG_CONS);
@@ -1261,7 +1264,7 @@ define_loop:
 	res = scheme_eval(exp, env);
 	
 	if(display_result) {
-		scheme_display(stdout, &res);
+		scheme_display(stdout, &res, 1);
 		puts("");
 	}
 
@@ -1283,13 +1286,24 @@ struct Obj scheme_builtin_eval(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_display(struct Obj *args) {
-	scheme_display(stdout, &args[0]);
+	scheme_display(stdout, &args[0], 0);
 	return const_nil;
 }
 
 struct Obj scheme_builtin_display_port(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
-	scheme_display(args[0].port.fptr, &args[1]);
+	scheme_display(args[0].port.fptr, &args[1], 0);
+	return const_nil;
+}
+
+struct Obj scheme_builtin_write(struct Obj *args) {
+	scheme_display(stdout, &args[0], 1);
+	return const_nil;
+}
+
+struct Obj scheme_builtin_write_port(struct Obj *args) {
+	assert(args[0].tag == TAG_PORT);
+	scheme_display(args[0].port.fptr, &args[1], 1);
 	return const_nil;
 }
 
@@ -1344,7 +1358,7 @@ struct Obj scheme_builtin_close(struct Obj *args) {
 
 struct Obj scheme_builtin_error(struct Obj *args) {
 	fprintf(stderr, "Scheme Error: ");
-	scheme_display(stderr, &args[0]);
+	scheme_display(stderr, &args[0], 1);
 	fprintf(stderr, "\n");
 	exit(1);
 	return const_nil;
@@ -1525,6 +1539,8 @@ void scheme_builtins_init(void) {
 
 	BUILTIN(display, 1);
 	BUILTIN_(display_port, "display/port", 2);
+	BUILTIN(write, 1);
+	BUILTIN_(write_port, "write/port", 2);
 	BUILTIN(newline, 0);
 	BUILTIN_(newline_port, "newline/port", 1);
 	BUILTIN_(read_char, "read-char", 1);

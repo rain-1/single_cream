@@ -22,7 +22,7 @@
 (define (max x y) (if (> x y) x y))
 
 ;;;; PRINT
-(define (print p) (display p) (newline))
+(define (print p) (write p) (newline))
 
 ;;;; EQUAL
 (define (equal? x y)
