@@ -240,14 +240,14 @@ int symbol_table_size = 0;
 	DO_SYMBOL(lambda) \
 	DO_SYMBOL(if) \
 	DO_SYMBOL(begin) \
-	DO_SYMBOL(preprocess) \
-	DO_SYMBOL(stdout) \
-	DO_SYMBOL(stderr)
+	DO_SYMBOL(preprocess)
 
 #define DO_SYMBOL(name) struct Obj sym_ ## name;
 DO_SYMBOLS
 #undef DO_SYMBOL
 struct Obj sym_set_bang;
+struct Obj sym_stdout;
+struct Obj sym_stderr;
 
 void scheme_symbol_init(void) {
 	int i;
@@ -268,6 +268,8 @@ void scheme_symbol_init(void) {
 DO_SYMBOLS
 #undef DO_SYMBOL
 sym_set_bang = scheme_symbol_intern("set!");
+sym_stdout = scheme_symbol_intern("stdout");
+sym_stderr = scheme_symbol_intern("stderr");
 }
 
 #undef DO_SYMBOLS
