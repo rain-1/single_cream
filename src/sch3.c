@@ -1643,12 +1643,9 @@ struct Obj preprocess_eval(struct Obj *rt, int display_result) {
 	return res;
 }
 
-int main(int argc, char **argv) {
+int main(void) {
 	struct Obj rt;
 	int line_no = 0;
-
-	(void) argc;
-	(void) argv;
 	
 	scheme_init();
 	scheme_root_push(&rt);
