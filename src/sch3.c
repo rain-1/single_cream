@@ -28,16 +28,16 @@ enum Tag {
 struct Obj {
 	enum Tag tag;
 	union {
-		struct { int id; } symbol;
-		struct { int val; } number;
-		struct { char val; } character;
+		int symbol;
+		int number;
+		char character;
 		struct { struct Obj *car, *cdr; } cons;
 		struct { struct Obj *args, *env, *body; } closure;
 		struct { int n_args; struct Obj (*impl)(struct Obj *args); char *name; } builtin;
-		struct { struct Obj *it; } string;
-		struct { struct Obj *it; } vector;
-		struct { FILE *fptr; } port;
-		struct { struct Obj *fwd; } gc;
+		struct Obj *string;
+		struct Obj *vector;
+		FILE *port;
+		struct Obj *gc;
 	} dat;
 };
 
@@ -186,10 +186,10 @@ void scheme_gc_forward(struct Obj *obj) {
 		obj->dat.closure.body = scheme_gc_copy(obj->dat.closure.body);
 		break;
 	case TAG_STRING:
-		obj->dat.string.it = scheme_gc_copy(obj->dat.string.it);
+		obj->dat.string = scheme_gc_copy(obj->dat.string);
 		break;
 	case TAG_VECTOR:
-		obj->dat.vector.it = scheme_gc_copy(obj->dat.vector.it);
+		obj->dat.vector = scheme_gc_copy(obj->dat.vector);
 		break;
 	case TAG_GC:
 		fprintf(stderr, "gc: error gc_forward\n");
@@ -208,12 +208,12 @@ struct Obj *scheme_gc_copy(struct Obj *obj) {
 	struct Obj *res;
 	
 	if(obj->tag == TAG_GC) {
-		return obj->dat.gc.fwd;
+		return obj->dat.gc;
 	}
 	if(scheme_gc_dead(obj)) {
 		res = scheme_gc_alloc(1);
 		*res = *obj;
-		*obj = (struct Obj){ .tag = TAG_GC, .dat.gc.fwd = res };
+		*obj = (struct Obj){ .tag = TAG_GC, .dat.gc = res };
 		return res;
 	}
 	else {
@@ -277,7 +277,7 @@ struct Obj scheme_symbol_intern(char *name) {
 	
 	for(i = 0; i < symbol_table_size; i++) {
 		if(!strcmp(symbol_table[i], name)) {
-			return (struct Obj){ .tag = TAG_SYMBOL, .dat.symbol.id = i };
+			return (struct Obj){ .tag = TAG_SYMBOL, .dat.symbol = i };
 		}
 	}
 	
@@ -289,7 +289,7 @@ struct Obj scheme_symbol_intern(char *name) {
 	strncpy(symbol_table[i], name, 64);
 	symbol_table_size++;
 	
-	return (struct Obj){ .tag = TAG_SYMBOL, .dat.symbol.id = i };
+	return (struct Obj){ .tag = TAG_SYMBOL, .dat.symbol = i };
 }
 
 char *scheme_symbol_name(int id) {
@@ -452,7 +452,7 @@ LBL(read_atom_char)
 		goto finish_atom_char;
 	default:
 LBL(finish_atom_char)
-		*rt = (struct Obj){ .tag = TAG_CHARACTER, .dat.character.val = (char) c };
+		*rt = (struct Obj){ .tag = TAG_CHARACTER, .dat.character = (char) c };
 		return;
 	}
 
@@ -487,7 +487,7 @@ LBL(read_buf)
 		// TODO: we should really check that all chars are digits
 		if((buf[0] == '-' && buf[1] != '\0') ||
                    ('0' <= buf[0] && buf[0] <= '9')) {
-			*rt = (struct Obj){ .tag = TAG_NUMBER, .dat.number.val = atoi(buf) };
+			*rt = (struct Obj){ .tag = TAG_NUMBER, .dat.number = atoi(buf) };
 			return;
 		}
 		else {
@@ -601,13 +601,13 @@ void scheme_build_string(struct Obj *rt, char *str) {
 	
 	*rt = const_nil;
 	for(i = (int)strlen(str)-1; i >= 0; i--) {
-		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .dat.character.val = str[i] };
+		rt_1 = (struct Obj){ .tag = TAG_CHARACTER, .dat.character = str[i] };
 		*rt = scheme_cons(&rt_1, rt);
 	}
 	
 	// *rt is rooted so we can allocate here
-	rt_1 = (struct Obj){ .tag = TAG_STRING, .dat.string.it = scheme_gc_alloc(1) };
-	*rt_1.dat.string.it = *rt;
+	rt_1 = (struct Obj){ .tag = TAG_STRING, .dat.string = scheme_gc_alloc(1) };
+	*rt_1.dat.string = *rt;
 	*rt = rt_1;
 }
 
@@ -616,11 +616,11 @@ void scheme_string_to_buf(struct Obj *obj, char *buf, int len) {
 	
 	assert(obj->tag == TAG_STRING);
 	
-	obj = obj->dat.string.it;
+	obj = obj->dat.string;
 	while(obj->tag == TAG_CONS) {
 		assert(obj->dat.cons.car->tag == TAG_CHARACTER);
 		if(i + 1 > len) break;
-		buf[i] = obj->dat.cons.car->dat.character.val;
+		buf[i] = obj->dat.cons.car->dat.character;
 		obj = obj->dat.cons.cdr;
 		i++;
 	}
@@ -662,11 +662,11 @@ int scheme_eq_internal(struct Obj *x, struct Obj *y) {
 		return 1;
 
 	case TAG_SYMBOL:
-		return x->dat.symbol.id == y->dat.symbol.id;
+		return x->dat.symbol == y->dat.symbol;
 	case TAG_NUMBER:
-		return x->dat.number.val == y->dat.number.val;
+		return x->dat.number == y->dat.number;
 	case TAG_CHARACTER:
-		return x->dat.character.val == y->dat.character.val;
+		return x->dat.character == y->dat.character;
 
 	case TAG_CONS:
 		return x->dat.cons.car == y->dat.cons.car && x->dat.cons.cdr == y->dat.cons.cdr;
@@ -678,11 +678,11 @@ int scheme_eq_internal(struct Obj *x, struct Obj *y) {
 			x->dat.closure.env == y->dat.closure.env;
 	
 	case TAG_STRING:
-		return x->dat.string.it == y->dat.string.it;
+		return x->dat.string == y->dat.string;
 	case TAG_VECTOR:
-		return x->dat.vector.it == y->dat.vector.it;
+		return x->dat.vector == y->dat.vector;
 	case TAG_PORT:
-		return x->dat.port.fptr == y->dat.port.fptr;
+		return x->dat.port == y->dat.port;
 	
 	case TAG_BUILTIN:
 		return x->dat.builtin.n_args == y->dat.builtin.n_args && x->dat.builtin.impl == y->dat.builtin.impl;
@@ -710,19 +710,19 @@ void scheme_display(FILE *fptr, struct Obj *x, int write) {
 		fprintf(fptr, "#<EOF>");
 		break;
 	case TAG_SYMBOL:
-		fprintf(fptr, "%s", scheme_symbol_name(x->dat.symbol.id));
+		fprintf(fptr, "%s", scheme_symbol_name(x->dat.symbol));
 		break;
 	case TAG_NUMBER:
-		fprintf(fptr, "%d", x->dat.number.val);
+		fprintf(fptr, "%d", x->dat.number);
 		break;
 	case TAG_CHARACTER:
 		if(write) {
-			if(x->dat.character.val == '\n') fprintf(fptr, "#\\newline");
-			else if(x->dat.character.val == '\t') fprintf(fptr, "#\\tab");
-			else if(x->dat.character.val == ' ') fprintf(fptr, "#\\space");
-			else fprintf(fptr, "#\\%c", x->dat.character.val);
+			if(x->dat.character == '\n') fprintf(fptr, "#\\newline");
+			else if(x->dat.character == '\t') fprintf(fptr, "#\\tab");
+			else if(x->dat.character == ' ') fprintf(fptr, "#\\space");
+			else fprintf(fptr, "#\\%c", x->dat.character);
 		} else {
-			fputc(x->dat.character.val, fptr);
+			fputc(x->dat.character, fptr);
 		}
 		break;
 	case TAG_NIL:
@@ -755,10 +755,10 @@ loop:
 		break;
 	case TAG_STRING:
 		if(write) fprintf(fptr, "\"");
-		x = x->dat.string.it;
+		x = x->dat.string;
 		while(x->tag == TAG_CONS) {
 			assert(x->dat.cons.car->tag == TAG_CHARACTER);
-			c = x->dat.cons.car->dat.character.val;
+			c = x->dat.cons.car->dat.character;
 			x = x->dat.cons.cdr;
 			if(write && (c == '\\' || c == '"')) {
 				fprintf(fptr, "\\%c", c);
@@ -771,13 +771,13 @@ loop:
 		break;
 	case TAG_VECTOR:
 		fprintf(fptr, "#");
-		scheme_display(fptr, x->dat.vector.it, write);
+		scheme_display(fptr, x->dat.vector, write);
 		break;
 	case TAG_BUILTIN:
 		fprintf(fptr, "#<builtin:%s>", x->dat.builtin.name);
 		break;
 	case TAG_GC:
-		fprintf(fptr, "#<gcfwd[%s]>", scheme_gc_dead(x->dat.gc.fwd) ? "dead" : "live");
+		fprintf(fptr, "#<gcfwd[%s]>", scheme_gc_dead(x->dat.gc) ? "dead" : "live");
 		break;
 	default:
 		fprintf(fptr, "scheme_display: unknown Obj [%d].\n", x->tag);
@@ -1008,7 +1008,7 @@ eval:
 			res = scheme_assoc(exp, &globals);
 		}
 		if(res.tag == TAG_FALSE) {
-			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->dat.symbol.id));
+			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->dat.symbol));
 			exit(1);
 		}
 		assert(res.tag == TAG_CONS);
@@ -1040,7 +1040,7 @@ eval:
 		
 		res = scheme_assoc(exp->dat.cons.car, env);
 		if(res.tag != TAG_CONS) {
-			fprintf(stderr, "scheme_builtin_set: failure looking up [%s]\n", scheme_symbol_name(exp->dat.cons.car->dat.symbol.id));
+			fprintf(stderr, "scheme_builtin_set: failure looking up [%s]\n", scheme_symbol_name(exp->dat.cons.car->dat.symbol));
 			scheme_display(stdout, &res, 1);
 			exit(1);
 		}
@@ -1139,7 +1139,7 @@ loop_begin:
 
 #ifdef DEBUG
 	if(f.tag == TAG_SYMBOL) {
-		printf("DEBUG: calling %s\n", scheme_symbol_name(f.dat.symbol.id));
+		printf("DEBUG: calling %s\n", scheme_symbol_name(f.dat.symbol));
 	}
 #endif
 
@@ -1292,7 +1292,7 @@ struct Obj scheme_builtin_display(struct Obj *args) {
 
 struct Obj scheme_builtin_display_port(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
-	scheme_display(args[0].dat.port.fptr, &args[1], 0);
+	scheme_display(args[0].dat.port, &args[1], 0);
 	return const_nil;
 }
 
@@ -1303,7 +1303,7 @@ struct Obj scheme_builtin_write(struct Obj *args) {
 
 struct Obj scheme_builtin_write_port(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
-	scheme_display(args[0].dat.port.fptr, &args[1], 1);
+	scheme_display(args[0].dat.port, &args[1], 1);
 	return const_nil;
 }
 
@@ -1315,16 +1315,16 @@ struct Obj scheme_builtin_newline(struct Obj *args) {
 
 struct Obj scheme_builtin_newline_port(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
-	fprintf(args[0].dat.port.fptr, "\n");
+	fprintf(args[0].dat.port, "\n");
 	return const_nil;
 }
 
 struct Obj scheme_builtin_read_char(struct Obj *args) {
 	int c;
 	assert(args[0].tag == TAG_PORT);
-	c = fgetc(args[0].dat.port.fptr);
+	c = fgetc(args[0].dat.port);
 	if(c == -1) return const_eof;
-	return (struct Obj){ .tag = TAG_CHARACTER, .dat.character.val = (char) c };
+	return (struct Obj){ .tag = TAG_CHARACTER, .dat.character = (char) c };
 }
 
 int fpeek(FILE *stream) {
@@ -1337,22 +1337,22 @@ int fpeek(FILE *stream) {
 struct Obj scheme_builtin_peek_char(struct Obj *args) {
 	int c;
 	assert(args[0].tag == TAG_PORT);
-	c = fpeek(args[0].dat.port.fptr);
+	c = fpeek(args[0].dat.port);
 	if(c == -1) return const_eof;
-	return (struct Obj){ .tag = TAG_CHARACTER, .dat.character.val = (char) c };
+	return (struct Obj){ .tag = TAG_CHARACTER, .dat.character = (char) c };
 }
 
 struct Obj scheme_builtin_write_char(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
 	assert(args[1].tag == TAG_CHARACTER);
-	fputc(args[1].dat.character.val, args[0].dat.port.fptr);
+	fputc(args[1].dat.character, args[0].dat.port);
 	return const_nil;
 }
 
 struct Obj scheme_builtin_close(struct Obj *args) {
 	assert(args[0].tag == TAG_PORT);
-	fclose(args[0].dat.port.fptr);
-	args[0].dat.port.fptr = NULL;
+	fclose(args[0].dat.port);
+	args[0].dat.port = NULL;
 	return const_nil;
 }
 
@@ -1367,7 +1367,7 @@ struct Obj scheme_builtin_error(struct Obj *args) {
 struct Obj scheme_builtin_gensym(struct Obj *args) {
 	char name[64] = { 0 };
 	assert(args[0].tag == TAG_SYMBOL);
-	if(sprintf(name, "gensym-%s-%ld", scheme_symbol_name(args[0].dat.symbol.id), random()%99999) <= 0) {
+	if(sprintf(name, "gensym-%s-%ld", scheme_symbol_name(args[0].dat.symbol), random()%99999) <= 0) {
 		fprintf(stderr, "scheme_builtin_gensym: sprintf failed");
 		exit(1);
 	}
@@ -1408,7 +1408,7 @@ struct Obj scheme_builtin_set_cdr(struct Obj *args) {
 struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
 	assert(args[0].tag == TAG_NUMBER); \
 	assert(args[1].tag == TAG_NUMBER); \
-	return (struct Obj){ .tag = TAG_NUMBER, .dat.number.val = args[0].dat.number.val OP args[1].dat.number.val }; \
+	return (struct Obj){ .tag = TAG_NUMBER, .dat.number = args[0].dat.number OP args[1].dat.number }; \
 }
 DEFINE_ARITH_BUILTIN(plus, +)
 DEFINE_ARITH_BUILTIN(minus, -)
@@ -1439,7 +1439,7 @@ struct Obj scheme_builtin_procedurep(struct Obj *args) { \
 struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
 	assert(args[0].tag == TAG_NUMBER); \
 	assert(args[1].tag == TAG_NUMBER); \
-	return (args[0].dat.number.val OP args[1].dat.number.val) ? const_true : const_false; \
+	return (args[0].dat.number OP args[1].dat.number) ? const_true : const_false; \
 }
 DEFINE_ARITH_COMPARE_BUILTIN(lt, <)
 DEFINE_ARITH_COMPARE_BUILTIN(gt, >)
@@ -1448,40 +1448,40 @@ DEFINE_ARITH_COMPARE_BUILTIN(ge, >=)
 
 struct Obj scheme_builtin_display_char(struct Obj *args) {
 	assert(args[0].tag == TAG_CHARACTER);
-	printf("%c", args[0].dat.character.val);
+	printf("%c", args[0].dat.character);
 	return const_nil;
 }
 
 struct Obj scheme_builtin_string_to_list(struct Obj *args) {
 	assert(args[0].tag == TAG_STRING);
-	return *args[0].dat.string.it;
+	return *args[0].dat.string;
 }
 
 struct Obj scheme_builtin_vector_to_list(struct Obj *args) {
 	assert(args[0].tag == TAG_VECTOR);
-	return *args[0].dat.vector.it;
+	return *args[0].dat.vector;
 }
 
 struct Obj scheme_builtin_list_to_string(struct Obj *args) {
-	struct Obj s  = (struct Obj){ .tag = TAG_STRING, .dat.string.it = scheme_gc_alloc(1) };
-	*s.dat.string.it = args[0];
+	struct Obj s  = (struct Obj){ .tag = TAG_STRING, .dat.string = scheme_gc_alloc(1) };
+	*s.dat.string = args[0];
 	return s;
 }
 
 struct Obj scheme_builtin_list_to_vector(struct Obj *args) {
-	struct Obj s  = (struct Obj){ .tag = TAG_VECTOR, .dat.string.it = scheme_gc_alloc(1) };
-	*s.dat.string.it = args[0];
+	struct Obj s  = (struct Obj){ .tag = TAG_VECTOR, .dat.string = scheme_gc_alloc(1) };
+	*s.dat.string = args[0];
 	return s;
 }
 
 struct Obj scheme_builtin_char_to_integer(struct Obj *args) {
 	assert(args[0].tag == TAG_CHARACTER);
-	return (struct Obj){ .tag = TAG_NUMBER, .dat.number.val = args[0].dat.character.val };
+	return (struct Obj){ .tag = TAG_NUMBER, .dat.number = args[0].dat.character };
 }
 
 struct Obj scheme_builtin_integer_to_char(struct Obj *args) {
 	assert(args[0].tag == TAG_NUMBER);
-	return (struct Obj){ .tag = TAG_CHARACTER, .dat.character.val = (char) args[0].dat.number.val };
+	return (struct Obj){ .tag = TAG_CHARACTER, .dat.character = (char) args[0].dat.number };
 }
 
 struct Obj scheme_builtin_string_to_symbol(struct Obj *args) {
@@ -1495,7 +1495,7 @@ struct Obj scheme_builtin_symbol_to_string(struct Obj *args) {
 	struct Obj res;
 	assert(args[0].tag == TAG_SYMBOL);
 	scheme_root_push(&res);
-	scheme_build_string(&res, scheme_symbol_name(args[0].dat.symbol.id));
+	scheme_build_string(&res, scheme_symbol_name(args[0].dat.symbol));
 	scheme_root_pop();
 	
 	return res;
@@ -1509,7 +1509,7 @@ struct Obj scheme_builtin_open_input_output_file(char *mode, struct Obj *args) {
 	scheme_string_to_buf(&args[0], filename, PATH_MAX);
 	fptr = fopen(filename, mode);
 	if(!fptr) return const_false;
-	return (struct Obj){ .tag = TAG_PORT, .dat.port.fptr = fptr };
+	return (struct Obj){ .tag = TAG_PORT, .dat.port = fptr };
 }
 
 struct Obj scheme_builtin_open_input_file(struct Obj *args) {
@@ -1601,11 +1601,11 @@ void scheme_constants_init(void) {
 	struct Obj tmp, obj;
 	scheme_root_push(&tmp);
 	
-	obj = (struct Obj){ .tag = TAG_PORT, .dat.port.fptr = stdout };
+	obj = (struct Obj){ .tag = TAG_PORT, .dat.port = stdout };
 	tmp = scheme_cons(&sym_stdout, &obj);
 	globals = scheme_cons(&tmp, &globals);
 	
-	obj = (struct Obj){ .tag = TAG_PORT, .dat.port.fptr = stderr };
+	obj = (struct Obj){ .tag = TAG_PORT, .dat.port = stderr };
 	tmp = scheme_cons(&sym_stderr, &obj);
 	globals = scheme_cons(&tmp, &globals);
 
