@@ -17,7 +17,7 @@
 # Don't rebuild the built things in bin
 VPATH = bin
 CC = gcc
-CFLAGS = -D_XOPEN_SOURCE=700 -O3 -std=c99 -pedantic -ggdb -Wall -Werror -Wextra -Wpedantic -Wshadow -Wconversion -Wno-missing-field-initializers
+CFLAGS = -D_XOPEN_SOURCE=700 -O3 -std=c11 -ggdb -Wall -Werror -Wextra -Wpedantic -Wshadow -Wconversion -Wno-missing-field-initializers
 RUN_SCRIPT=./util/run.sh
 
 all: sch3
