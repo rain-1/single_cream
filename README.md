@@ -53,3 +53,6 @@ We have tested it with travis continuation integration, and on x64 linux and ras
 * https://github.com/carld/micro-lisp
 * https://github.com/kanaka/mal/tree/master/c
 * https://github.com/rain-1/tinyscheme
+* http://canonical.org/~kragen/sw/urscheme/
+* http://piumarta.com/software/maru/
+* https://github.com/darius/ichbins
