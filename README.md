@@ -51,3 +51,4 @@ We have tested it with travis continuation integration, and on x64 linux and ras
 * https://github.com/rui314/minilisp
 * https://github.com/edvb/tisp
 * https://github.com/carld/micro-lisp
+* https://github.com/kanaka/mal/tree/master/c
