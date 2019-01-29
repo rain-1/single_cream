@@ -48,3 +48,5 @@ We have tested it with travis continuation integration, and on x64 linux and ras
 ## See also
 
 * https://github.com/petermichaux/bootstrap-scheme
+* https://github.com/rui314/minilisp
+* https://github.com/edvb/tisp
