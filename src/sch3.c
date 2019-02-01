@@ -57,6 +57,8 @@ char **symbol_table;
 // GC_OFF = 0 -> on
 #define GC_OFF 0
 
+#define die_unless(condition) do { if(!(condition)) {fprintf(stderr, "Oops on line %d: %s\n", __LINE__, #condition); exit(1);} } while(0)
+
 struct Obj globals;
 
 void scheme_init(void);
@@ -106,7 +108,7 @@ void scheme_init(void) {
  */
 
 void scheme_root_push_value(struct Obj *obj) {
-	assert(gc_root_stack_height < ROOTSTACK_SIZE);
+	die_unless(gc_root_stack_height < ROOTSTACK_SIZE);
 	gc_root_stack[gc_root_stack_height] = obj;
 	gc_root_stack_height++;
 }
@@ -119,7 +121,7 @@ void scheme_root_push(struct Obj *obj) {
 void scheme_root_pop() {
 	gc_root_stack[gc_root_stack_height] = NULL;
 	gc_root_stack_height--;
-	assert(gc_root_stack_height >= 0);
+	die_unless(gc_root_stack_height >= 0);
 }
 
 
@@ -133,8 +135,8 @@ struct Obj *scheme_gc_copy(struct Obj *obj);
 void scheme_gc_init(void) {
 	gc_live_space = calloc(SEMISPACE_SIZE, sizeof(struct Obj));
 	gc_dead_space = calloc(SEMISPACE_SIZE, sizeof(struct Obj));
-	assert(gc_live_space);
-	assert(gc_dead_space);
+	die_unless(gc_live_space);
+	die_unless(gc_dead_space);
 	gc_free_ptr = gc_live_space;
 	gc_scan_ptr = NULL;
 }
@@ -254,9 +256,9 @@ void scheme_symbol_init(void) {
 	char *slab;
 
 	slab = calloc(MAX_SYMBOLS, 64);
-	assert(slab);
+	die_unless(slab);
 	symbol_table = calloc(MAX_SYMBOLS, sizeof(char*));
-	assert(symbol_table);
+	die_unless(symbol_table);
 	for(i = 0; i < MAX_SYMBOLS; i++) {
 		symbol_table[i] = slab + 64*i;
 	}
@@ -415,7 +417,7 @@ LBL(read_atom_char)
 			goto finish_atom_char;
 		}
 		GETCHAR(c, stdin);
-		assert(c == 'b');
+		die_unless(c == 'b');
 		c = '\t';
 		goto finish_atom_char;
 	case 'n':
@@ -426,15 +428,15 @@ LBL(read_atom_char)
 			goto finish_atom_char;
 		}
 		GETCHAR(c, stdin);
-		assert(c == 'w');
+		die_unless(c == 'w');
 		GETCHAR(c, stdin);
-		assert(c == 'l');
+		die_unless(c == 'l');
 		GETCHAR(c, stdin);
-		assert(c == 'i');
+		die_unless(c == 'i');
 		GETCHAR(c, stdin);
-		assert(c == 'n');
+		die_unless(c == 'n');
 		GETCHAR(c, stdin);
-		assert(c == 'e');
+		die_unless(c == 'e');
 		c = '\n';
 		goto finish_atom_char;
 	case 's':
@@ -445,11 +447,11 @@ LBL(read_atom_char)
 			goto finish_atom_char;
 		}
 		GETCHAR(c, stdin);
-		assert(c == 'a');
+		die_unless(c == 'a');
 		GETCHAR(c, stdin);
-		assert(c == 'c');
+		die_unless(c == 'c');
 		GETCHAR(c, stdin);
-		assert(c == 'e');
+		die_unless(c == 'e');
 		c = ' ';
 		goto finish_atom_char;
 	default:
@@ -616,11 +618,11 @@ void scheme_build_string(struct Obj *rt, char *str) {
 void scheme_string_to_buf(struct Obj *obj, char *buf, int len) {
 	int i = 0; // len must be >= 1
 	
-	assert(obj->tag == TAG_STRING);
+	die_unless(obj->tag == TAG_STRING);
 	
 	obj = obj->string;
 	while(obj->tag == TAG_CONS) {
-		assert(obj->cons.car->tag == TAG_CHARACTER);
+		die_unless(obj->cons.car->tag == TAG_CHARACTER);
 		if(i + 1 > len) break;
 		buf[i] = obj->cons.car->character;
 		obj = obj->cons.cdr;
@@ -759,7 +761,7 @@ loop:
 		if(write) fprintf(fptr, "\"");
 		x = x->string;
 		while(x->tag == TAG_CONS) {
-			assert(x->cons.car->tag == TAG_CHARACTER);
+			die_unless(x->cons.car->tag == TAG_CHARACTER);
 			c = x->cons.car->character;
 			x = x->cons.cdr;
 			if(write && (c == '\\' || c == '"')) {
@@ -804,7 +806,7 @@ struct Obj scheme_append(struct Obj *xs, struct Obj *ys) {
 		return *ys;
 	}
 	
-	assert(xs->tag == TAG_CONS);
+	die_unless(xs->tag == TAG_CONS);
 
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
@@ -856,7 +858,7 @@ struct Obj scheme_zip_append(struct Obj *xs, struct Obj *ys, struct Obj *zs) {
 		fprintf(stderr, "error in zip_append: function called with too few arguments.\n");
 		exit(1);
 	}
-	assert(xs->tag == TAG_CONS);
+	die_unless(xs->tag == TAG_CONS);
 
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
@@ -896,8 +898,8 @@ struct Obj scheme_assoc(struct Obj *key, struct Obj *table) {
 		return const_false;
 	}
 	
-	assert(table->tag == TAG_CONS);
-	assert(table->cons.car->tag == TAG_CONS);
+	die_unless(table->tag == TAG_CONS);
+	die_unless(table->cons.car->tag == TAG_CONS);
 	
 	if(scheme_eq(key, table->cons.car->cons.car).tag != TAG_FALSE) {
 		return *table->cons.car;
@@ -924,7 +926,7 @@ struct Obj scheme_evlist(struct Obj *exps, struct Obj *env) {
 		return const_nil;
 	}
 	
-	assert(exps->tag == TAG_CONS);
+	die_unless(exps->tag == TAG_CONS);
 
 	scheme_root_push(&t1);
 	scheme_root_push(&t2);
@@ -1013,7 +1015,7 @@ eval:
 			fprintf(stderr, "error in scheme_eval: reference to an undefined variable [%s].\n", scheme_symbol_name(exp->symbol));
 			exit(1);
 		}
-		assert(res.tag == TAG_CONS);
+		die_unless(res.tag == TAG_CONS);
 		return *res.cons.cdr;
 	}
 	
@@ -1025,7 +1027,7 @@ eval:
 	if(scheme_eq_internal(exp->cons.car, &sym_quote)) {
 		// (quote <exp>)
 		
-		assert(exp->cons.cdr->cons.cdr->tag == TAG_NIL);
+		die_unless(exp->cons.cdr->cons.cdr->tag == TAG_NIL);
 		
 		return *exp->cons.cdr->cons.car;
 	}
@@ -1033,9 +1035,9 @@ eval:
 	if(scheme_eq_internal(exp->cons.car, &sym_set_bang)) {
 		// (set! <name> <val>)
 		
-		assert(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
+		die_unless(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
 		*exp = *exp->cons.cdr;
-		assert(exp->cons.car->tag == TAG_SYMBOL);
+		die_unless(exp->cons.car->tag == TAG_SYMBOL);
 		
 		t1 = *exp->cons.cdr->cons.car;
 		t1 = scheme_eval_internal(&t1, env);
@@ -1046,7 +1048,7 @@ eval:
 			scheme_display(stdout, &res, 1);
 			exit(1);
 		}
-		assert(res.tag == TAG_CONS);
+		die_unless(res.tag == TAG_CONS);
 		*res.cons.cdr = t1;
 		
 		return *exp->cons.cdr->cons.car;
@@ -1059,7 +1061,7 @@ eval:
 //		scheme_root_push(env);
 loop_begin:
 		*exp = *exp->cons.cdr;
-		assert(exp->tag == TAG_CONS);
+		die_unless(exp->tag == TAG_CONS);
 		
 		t1 = *exp->cons.car;
 		if(exp->cons.cdr->tag == TAG_NIL) {
@@ -1079,10 +1081,10 @@ loop_begin:
 	if(scheme_eq_internal(exp->cons.car, &sym_if)) {
 		// (if t1 t2 t3)
 		
-		assert(exp->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
+		die_unless(exp->cons.cdr->tag == TAG_CONS);
+		die_unless(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
+		die_unless(exp->cons.cdr->cons.cdr->cons.cdr->tag == TAG_CONS);
+		die_unless(exp->cons.cdr->cons.cdr->cons.cdr->cons.cdr->tag == TAG_NIL);
 
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
@@ -1111,8 +1113,8 @@ loop_begin:
 	if(scheme_eq_internal(exp->cons.car, &sym_lambda)) {
 		// (lambda <args> <body> ...)
 		
-		assert(exp->cons.cdr->tag == TAG_CONS);
-		assert(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
+		die_unless(exp->cons.cdr->tag == TAG_CONS);
+		die_unless(exp->cons.cdr->cons.cdr->tag == TAG_CONS);
 		
 		scheme_root_push(&t1);
 		scheme_root_push(&t2);
@@ -1293,7 +1295,7 @@ struct Obj scheme_builtin_display(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_display_port(struct Obj *args) {
-	assert(args[0].tag == TAG_PORT);
+	die_unless(args[0].tag == TAG_PORT);
 	scheme_display(args[0].port, &args[1], 0);
 	return const_nil;
 }
@@ -1304,7 +1306,7 @@ struct Obj scheme_builtin_write(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_write_port(struct Obj *args) {
-	assert(args[0].tag == TAG_PORT);
+	die_unless(args[0].tag == TAG_PORT);
 	scheme_display(args[0].port, &args[1], 1);
 	return const_nil;
 }
@@ -1316,14 +1318,14 @@ struct Obj scheme_builtin_newline(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_newline_port(struct Obj *args) {
-	assert(args[0].tag == TAG_PORT);
+	die_unless(args[0].tag == TAG_PORT);
 	fprintf(args[0].port, "\n");
 	return const_nil;
 }
 
 struct Obj scheme_builtin_read_char(struct Obj *args) {
 	int c;
-	assert(args[0].tag == TAG_PORT);
+	die_unless(args[0].tag == TAG_PORT);
 	c = fgetc(args[0].port);
 	if(c == -1) return const_eof;
 	return (struct Obj){ .tag = TAG_CHARACTER, .character = (char) c };
@@ -1338,21 +1340,21 @@ int fpeek(FILE *stream) {
 
 struct Obj scheme_builtin_peek_char(struct Obj *args) {
 	int c;
-	assert(args[0].tag == TAG_PORT);
+	die_unless(args[0].tag == TAG_PORT);
 	c = fpeek(args[0].port);
 	if(c == -1) return const_eof;
 	return (struct Obj){ .tag = TAG_CHARACTER, .character = (char) c };
 }
 
 struct Obj scheme_builtin_write_char(struct Obj *args) {
-	assert(args[0].tag == TAG_PORT);
-	assert(args[1].tag == TAG_CHARACTER);
+	die_unless(args[0].tag == TAG_PORT);
+	die_unless(args[1].tag == TAG_CHARACTER);
 	fputc(args[1].character, args[0].port);
 	return const_nil;
 }
 
 struct Obj scheme_builtin_close(struct Obj *args) {
-	assert(args[0].tag == TAG_PORT);
+	die_unless(args[0].tag == TAG_PORT);
 	fclose(args[0].port);
 	args[0].port = NULL;
 	return const_nil;
@@ -1368,7 +1370,7 @@ struct Obj scheme_builtin_error(struct Obj *args) {
 
 struct Obj scheme_builtin_gensym(struct Obj *args) {
 	char name[64] = { 0 };
-	assert(args[0].tag == TAG_SYMBOL);
+	die_unless(args[0].tag == TAG_SYMBOL);
 	if(sprintf(name, "gensym-%s-%ld", scheme_symbol_name(args[0].symbol), random()%99999) <= 0) {
 		fprintf(stderr, "scheme_builtin_gensym: sprintf failed");
 		exit(1);
@@ -1385,31 +1387,31 @@ struct Obj scheme_builtin_cons(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_car(struct Obj *args) {
-	assert(args[0].tag == TAG_CONS);
+	die_unless(args[0].tag == TAG_CONS);
 	return *args[0].cons.car;
 }
 
 struct Obj scheme_builtin_cdr(struct Obj *args) {
-	assert(args[0].tag == TAG_CONS);
+	die_unless(args[0].tag == TAG_CONS);
 	return *args[0].cons.cdr;
 }
 
 struct Obj scheme_builtin_set_car(struct Obj *args) {
-	assert(args[0].tag == TAG_CONS);
+	die_unless(args[0].tag == TAG_CONS);
 	*args[0].cons.car = args[1];
 	return const_nil;
 }
 
 struct Obj scheme_builtin_set_cdr(struct Obj *args) {
-	assert(args[0].tag == TAG_CONS);
+	die_unless(args[0].tag == TAG_CONS);
 	*args[0].cons.cdr = args[1];
 	return const_nil;
 }
 
 #define DEFINE_ARITH_BUILTIN(NM, OP) \
 struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
-	assert(args[0].tag == TAG_NUMBER); \
-	assert(args[1].tag == TAG_NUMBER); \
+	die_unless(args[0].tag == TAG_NUMBER); \
+	die_unless(args[1].tag == TAG_NUMBER); \
 	return (struct Obj){ .tag = TAG_NUMBER, .number = args[0].number OP args[1].number }; \
 }
 DEFINE_ARITH_BUILTIN(plus, +)
@@ -1439,8 +1441,8 @@ struct Obj scheme_builtin_procedurep(struct Obj *args) { \
 
 #define DEFINE_ARITH_COMPARE_BUILTIN(NM, OP) \
 struct Obj scheme_builtin_ ## NM(struct Obj *args) { \
-	assert(args[0].tag == TAG_NUMBER); \
-	assert(args[1].tag == TAG_NUMBER); \
+	die_unless(args[0].tag == TAG_NUMBER); \
+	die_unless(args[1].tag == TAG_NUMBER); \
 	return (args[0].number OP args[1].number) ? const_true : const_false; \
 }
 DEFINE_ARITH_COMPARE_BUILTIN(lt, <)
@@ -1449,18 +1451,18 @@ DEFINE_ARITH_COMPARE_BUILTIN(le, <=)
 DEFINE_ARITH_COMPARE_BUILTIN(ge, >=)
 
 struct Obj scheme_builtin_display_char(struct Obj *args) {
-	assert(args[0].tag == TAG_CHARACTER);
+	die_unless(args[0].tag == TAG_CHARACTER);
 	printf("%c", args[0].character);
 	return const_nil;
 }
 
 struct Obj scheme_builtin_string_to_list(struct Obj *args) {
-	assert(args[0].tag == TAG_STRING);
+	die_unless(args[0].tag == TAG_STRING);
 	return *args[0].string;
 }
 
 struct Obj scheme_builtin_vector_to_list(struct Obj *args) {
-	assert(args[0].tag == TAG_VECTOR);
+	die_unless(args[0].tag == TAG_VECTOR);
 	return *args[0].vector;
 }
 
@@ -1477,25 +1479,25 @@ struct Obj scheme_builtin_list_to_vector(struct Obj *args) {
 }
 
 struct Obj scheme_builtin_char_to_integer(struct Obj *args) {
-	assert(args[0].tag == TAG_CHARACTER);
+	die_unless(args[0].tag == TAG_CHARACTER);
 	return (struct Obj){ .tag = TAG_NUMBER, .number = args[0].character };
 }
 
 struct Obj scheme_builtin_integer_to_char(struct Obj *args) {
-	assert(args[0].tag == TAG_NUMBER);
+	die_unless(args[0].tag == TAG_NUMBER);
 	return (struct Obj){ .tag = TAG_CHARACTER, .character = (char) args[0].number };
 }
 
 struct Obj scheme_builtin_string_to_symbol(struct Obj *args) {
 	char buf[128] = { 0 };
-	assert(args[0].tag == TAG_STRING);
+	die_unless(args[0].tag == TAG_STRING);
 	scheme_string_to_buf(&args[0], buf, sizeof buf);
 	return scheme_symbol_intern(buf);
 }
 
 struct Obj scheme_builtin_symbol_to_string(struct Obj *args) {
 	struct Obj res;
-	assert(args[0].tag == TAG_SYMBOL);
+	die_unless(args[0].tag == TAG_SYMBOL);
 	scheme_root_push(&res);
 	scheme_build_string(&res, scheme_symbol_name(args[0].symbol));
 	scheme_root_pop();
@@ -1507,7 +1509,7 @@ struct Obj scheme_builtin_symbol_to_string(struct Obj *args) {
 struct Obj scheme_builtin_open_input_output_file(char *mode, struct Obj *args) {
 	FILE* fptr;
 	char filename[PATH_MAX] = { 0 };
-	assert(args[0].tag == TAG_STRING);
+	die_unless(args[0].tag == TAG_STRING);
 	scheme_string_to_buf(&args[0], filename, PATH_MAX);
 	fptr = fopen(filename, mode);
 	if(!fptr) return const_false;
@@ -1529,7 +1531,7 @@ void scheme_builtins_init(void) {
 #define BUILTIN(IMPL, NARGS) BUILTIN_(IMPL, # IMPL, NARGS)
 #define BUILTIN_(IMPL, NAME, NARGS) \
 	do { \
-		assert(NARGS <= MAX_BUILTIN_ARGS); \
+		die_unless(NARGS <= MAX_BUILTIN_ARGS); \
 		tmp = (struct Obj){ .tag = TAG_BUILTIN, .builtin.n_args = NARGS, .builtin.impl = scheme_builtin_ ## IMPL, .builtin.name = NAME }; \
 		nm = scheme_symbol_intern(NAME); \
 		tmp = scheme_cons(&nm, &tmp); \
