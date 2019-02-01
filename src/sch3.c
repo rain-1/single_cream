@@ -499,7 +499,7 @@ LBL(read_buf)
 			return;
 		}
 	}
-	if(buflen >= ATOM_BUFLIMIT) {
+	if(buflen >= ATOM_BUFLIMIT-1) {
 		fprintf(stderr, "scheme_read_atom: token longer than buffer\n");
 		exit(1);
 	}
