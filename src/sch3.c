@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,8 @@ struct Obj {
 		struct Obj *gc;
 	};
 };
+
+FILE *input_port;
 
 #define SEMISPACE_SIZE (1<<18)
 struct Obj *gc_live_space, *gc_dead_space;
@@ -334,14 +337,14 @@ void scheme_read_skip_ws(int *line_no, int eof_err) {
 	int c;
 
 skip_loop:
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case EOF:
 		if(eof_err) {
 			fprintf(stderr, "scheme_skip_ws: early EOF on line %d.\n", *line_no);
 			exit(1);
 		}
-		fclose(stdin);
+		fclose(input_port);
 		return;
 	case ' ':
 	case '\n':
@@ -350,12 +353,12 @@ skip_loop:
 	case ';':
 		goto skip_comment;
 	default:
-		UNGETCHAR(c, stdin);
+		UNGETCHAR(c, input_port);
 		return;
 	}
 
 skip_comment:
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case EOF:
 		if(eof_err) {
@@ -380,7 +383,7 @@ void scheme_read_atom(struct Obj *rt, int *line_no) {
 	int buflen = 0;
 	buf[buflen] = '\0';
 
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case '#':
 		goto read_atom_hash;
@@ -391,7 +394,7 @@ void scheme_read_atom(struct Obj *rt, int *line_no) {
 	}
 
 LBL(read_atom_hash)
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case 't':
 		*rt = const_true;
@@ -407,50 +410,50 @@ LBL(read_atom_hash)
 	}
 
 LBL(read_atom_char)
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case 't':
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		if(c != 'a') {
-			UNGETCHAR(c, stdin);
+			UNGETCHAR(c, input_port);
 			c = 't';
 			goto finish_atom_char;
 		}
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'b');
 		c = '\t';
 		goto finish_atom_char;
 	case 'n':
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		if(c != 'e') {
-			UNGETCHAR(c, stdin);
+			UNGETCHAR(c, input_port);
 			c = 'n';
 			goto finish_atom_char;
 		}
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'w');
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'l');
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'i');
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'n');
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'e');
 		c = '\n';
 		goto finish_atom_char;
 	case 's':
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		if(c != 'p') {
-			UNGETCHAR(c, stdin);
+			UNGETCHAR(c, input_port);
 			c = 's';
 			goto finish_atom_char;
 		}
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'a');
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'c');
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 		die_unless(c == 'e');
 		c = ' ';
 		goto finish_atom_char;
@@ -461,7 +464,7 @@ LBL(finish_atom_char)
 	}
 
 LBL(read_atom_string)
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	if(c == EOF) {
 		fprintf(stderr, "error in scheme_read_atom: eof inside string on line %d.\n", *line_no);
 		exit(1);
@@ -471,7 +474,7 @@ LBL(read_atom_string)
 		return;
 	}
 	if(c == '\\') {
-		GETCHAR(c, stdin);
+		GETCHAR(c, input_port);
 	}
 	if(buflen >= ATOM_BUFLIMIT) {
 		fprintf(stderr, "scheme_read_atom: token longer than buffer\n");
@@ -486,7 +489,7 @@ LBL(read_buf)
 	   c == ' ' || c == '\n' || c == '\t' ||
 	   c == '(' || c == ')') {
 		if(c == '(' || c == ')')
-			UNGETCHAR(c, stdin);
+			UNGETCHAR(c, input_port);
 
 		// TODO: we should really check that all chars are digits
 		if((buf[0] == '-' && buf[1] != '\0') ||
@@ -505,7 +508,7 @@ LBL(read_buf)
 	}
 	buf[buflen++] = (char) c;
 	buf[buflen] = '\0';
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	goto read_buf;
 }
 
@@ -513,7 +516,7 @@ void scheme_read(struct Obj *rt, int *line_no) {
 	int c;
 	
 	scheme_read_skip_ws(line_no, 0);
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case EOF:
 		*rt = const_eof;
@@ -529,7 +532,7 @@ void scheme_read(struct Obj *rt, int *line_no) {
 	case ',':
 		goto read_shorthand;
 	default:
-		UNGETCHAR(c, stdin);
+		UNGETCHAR(c, input_port);
 		scheme_read_atom(rt, line_no);
 		return;
 	}
@@ -561,7 +564,7 @@ void scheme_read_many(struct Obj *rt, int *line_no) {
 	struct Obj rt_1, rt_2;
 	
 	scheme_read_skip_ws(line_no, 1);
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case ')':
 		*rt = const_nil;
@@ -570,7 +573,7 @@ void scheme_read_many(struct Obj *rt, int *line_no) {
 		scheme_read(rt, line_no);
 		goto read_many_finish;
 	default:
-		UNGETCHAR(c, stdin);
+		UNGETCHAR(c, input_port);
 		
 		scheme_root_push(&rt_1);
 		scheme_root_push(&rt_2);
@@ -588,7 +591,7 @@ void scheme_read_many(struct Obj *rt, int *line_no) {
 
 LBL(read_many_finish)
 	scheme_read_skip_ws(line_no, 1);
-	GETCHAR(c, stdin);
+	GETCHAR(c, input_port);
 	switch(c) {
 	case ')':
 		return;
@@ -1647,10 +1650,17 @@ struct Obj preprocess_eval(struct Obj *rt, int display_result) {
 	return res;
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
 	struct Obj rt;
 	int line_no = 0;
-	
+
+	if (argc == 1) input_port = stdin;
+	else input_port = fopen(argv[1], "r");
+	if (!input_port) {
+		fprintf(stderr, "could not open input file\n");
+		return 1;
+	}
+
 	scheme_init();
 	scheme_root_push(&rt);
 	do {
