@@ -43,7 +43,7 @@ It's very useful to have a comprehensive set of tests. Our tests are divided int
 * `t/rosetta`: Problems and solutions taken from the rosettacode code comparison site.
 * `t/sicp`: Ideas taken from the SICP book. nqueens is a particularly powerful stressor.
 
-We have tested it with travis continuation integration, and on x64 linux and raspberry pi ARM linux.
+We have tested it with travis continuation integration, and on x64 linux and raspberry pi ARM linux. It has also booted up on gio's ASMC OS and executed the minikanren and jbob theorem prover examples.
 
 ## See also
 
