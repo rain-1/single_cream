@@ -51,7 +51,7 @@ struct Obj *gc_free_ptr, *gc_scan_ptr;
 struct Obj *gc_root_stack[ROOTSTACK_SIZE];
 int gc_root_stack_height = 0;
 
-#define MAX_SYMBOLS (1<<11)
+#define MAX_SYMBOLS (1<<12)
 char **symbol_table;
 
 #define MAX_BUILTIN_ARGS 5
