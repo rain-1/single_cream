@@ -35,11 +35,13 @@ tarot_go ./tarot-compiler/std/cxr.scm
 tarot_go ./tarot-compiler/macros.scm
 tarot_go \
     "./tarot-compiler/std/numbers.scm" \
-    "./tarot-compiler/std/lists.scm" \
+    "./tarot-compiler/std/equal.scm" \
+    "./tarot-compiler/std/boxes.scm"
+tarot_go \
+    "./tarot-compiler/std/lists.scm"
+tarot_go \
     "./tarot-compiler/std/display.scm"
 tarot_go \
-    "./tarot-compiler/std/boxes.scm" \
-    "./tarot-compiler/std/equal.scm" \
     "./tarot-compiler/std/queue.scm" \
     "./tarot-compiler/std/seq.scm" \
     "./tarot-compiler/std/shapes.scm" \
