@@ -64,7 +64,7 @@ char **symbol_table;
 
 struct Obj globals;
 
-void scheme_init(void);
+void scheme_init(char **argv);
 
 void scheme_gc_init(void);
 struct Obj *scheme_gc_alloc(int cells);
@@ -90,10 +90,10 @@ struct Obj scheme_evlist(struct Obj *exps, struct Obj *env);
 struct Obj scheme_eval(struct Obj *exp, struct Obj *env);
 
 void scheme_builtins_init(void);
-void scheme_constants_init(void);
+void scheme_constants_init(char **argv);
 
 struct Obj const_false, const_true, const_eof, const_nil, const_stdout, const_stderr;
-void scheme_init(void) {
+void scheme_init(char **argv) {
 	const_false = (struct Obj){ .tag = TAG_FALSE };
 	const_true = (struct Obj){ .tag = TAG_TRUE };
 	const_eof = (struct Obj){ .tag = TAG_EOF };
@@ -102,7 +102,7 @@ void scheme_init(void) {
 	scheme_root_push(&globals);
 	scheme_symbol_init();
 	scheme_builtins_init();
-	scheme_constants_init();
+	scheme_constants_init(argv);
 }
 
 
@@ -245,7 +245,8 @@ int symbol_table_size = 0;
 	DO_SYMBOL(lambda) \
 	DO_SYMBOL(if) \
 	DO_SYMBOL(begin) \
-	DO_SYMBOL(preprocess)
+	DO_SYMBOL(preprocess) \
+	DO_SYMBOL(argv)
 
 #define DO_SYMBOL(name) struct Obj sym_ ## name;
 DO_SYMBOLS
@@ -1604,8 +1605,10 @@ void scheme_builtins_init(void) {
 	scheme_root_pop();
 }
 
-void scheme_constants_init(void) {
+void scheme_constants_init(char **argv) {
 	struct Obj tmp, obj;
+	int argc = 0;
+	
 	scheme_root_push(&tmp);
 	
 	obj = (struct Obj){ .tag = TAG_PORT, .port = stdout };
@@ -1615,7 +1618,23 @@ void scheme_constants_init(void) {
 	obj = (struct Obj){ .tag = TAG_PORT, .port = stderr };
 	tmp = scheme_cons(&sym_stderr, &obj);
 	globals = scheme_cons(&tmp, &globals);
-
+	
+	scheme_root_push(&obj);
+	obj = const_nil;
+	while(argv && *argv) {
+	  argv++;
+	  argc++;
+	}
+	while(argc) {
+	  argv--;
+	  argc--;
+	  scheme_build_string(&tmp, *argv);
+	  obj = scheme_cons(&tmp, &obj);
+	}
+	tmp = scheme_cons(&sym_argv, &obj);
+	globals = scheme_cons(&tmp, &globals);
+	
+	scheme_root_pop();
 	scheme_root_pop();
 }
 
@@ -1653,15 +1672,24 @@ struct Obj preprocess_eval(struct Obj *rt, int display_result) {
 int main(int argc, char *argv[]) {
 	struct Obj rt;
 	int line_no = 0;
-
-	if (argc == 1) input_port = stdin;
-	else input_port = fopen(argv[1], "r");
+	
+	// command line args:
+	// NONE: read from stdin
+	// ONE: read from this filename
+	// "--" then other args: read from stdin and provide command line args to scheme script
+	
+	input_port = stdin;
+	if (argc == 1) { argv = NULL; }
+	else if (argc == 2) { input_port = fopen(argv[1], "r"); argv = NULL; }
+	else if(!strcmp(argv[1], "--"))
+	  argv += 2;
+	
 	if (!input_port) {
 		fprintf(stderr, "could not open input file\n");
 		return 1;
 	}
-
-	scheme_init();
+	
+	scheme_init(argv);
 	scheme_root_push(&rt);
 	do {
 		rt = const_nil;
